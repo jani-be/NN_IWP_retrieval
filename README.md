@@ -8,7 +8,7 @@ This repository contains all necassary files of the neural-network-based IWP ret
 For each of 10 altitude levels between 8.5 km and 13 km, three nerual networks have been trained on different random subsamples of the same training/testing dataset.
 Last one was created by a coupled model set-up of ICON and PAMTRA. The final retrieval outputs an average of the three networks trained at the altitude level closest to the actual HAMP observation. Detailed information about the retrieval and its development can be found in the master's thesis document.
 
-All the trained neural networks itself are saved under the [NNs](\NNs) directory, which inlcudes all individual networks trained for altitudes between 8.5 km and 13 km.
+All the trained neural networks itself are saved under the [NNs](NNs) directory, which inlcudes all individual networks trained for altitudes between 8.5 km and 13 km.
 Along with these networks the (ICON-PAMTRA) training and testing data used for each of the networks is saved as netcdf files under [train_test_data](\NNs\train_test_data).
 Further, figures displaying the [loss](\NNs\testing_loss) during training as well as the network predictions for each of their test data set (as [probability density functions](\NNs\testing_pdfs) and [scatterdensity](\NNs\testing_scatterdensity) plots) are saved.
 
