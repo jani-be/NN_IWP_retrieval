@@ -2,6 +2,7 @@
 Neural-network-based ice water path retrieval for the passive airborne microwave observations of HAMP, conducted during the HALO-AC3 campaign
 
 This repository contains all necassary files of the neural-network-based IWP retrieval for the HALO-AC3 observations. In general, the retrieval consists of 30 identical neural networks having the following architecture:
+
 <img width="594" alt="Screenshot 2023-11-07 at 18 17 49" src="https://github.com/MaxRing96/NN_IWP_retrieval/assets/62293752/a9208f42-d2eb-40bc-ac96-d002d60f22cc">
 
 
@@ -14,6 +15,7 @@ Further, figures displaying the [loss](NNs/testing_loss) during training as well
 
 The python script [src.py](src.py) contains some basic functions used in the other scripts, while [nn_iwp_retrieval.py](nn_iwp_retrieval.py) contains the core function of the neural network retrieval. 
 The jupyter notebook [retrieval_quicklooks.ipynb](retrieval_quicklooks.ipynb) can be used to apply the retrieval on the individual HALO-AC3 research flights and to plot its results along with the HAMP radar and radiometer data. An example is shown here for HALO-AC3 research flight 5:
+
 ![example](https://github.com/MaxRing96/NN_IWP_retrieval/assets/62293752/b59ffbf3-5218-49da-adaa-7c712335cd9e)
 
 However, the radar and radiometer data is not included in this repository and has to be downloaded seperately in order to use the notebook. The notebook just serves as an example for the retrieval application, but is not needed for the retrieval application in general
