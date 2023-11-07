@@ -2,7 +2,7 @@
 Neural-network-based ice water path retrieval for the passive airborne microwave observations of HAMP, conducted during the HALO-AC3 campaign
 
 This repository contains all necassary files of the neural-network-based IWP retrieval for the HALO-AC3 observations. In general, the retrieval consists of 30 identical neural networks having the following architecture:
-[NN_architecture_sketch.pdf](https://github.com/MaxRing96/NN_IWP_retrieval/files/13283896/NN_architecture_sketch.pdf)
+![NN_architecture_sketch.pdf](https://github.com/MaxRing96/NN_IWP_retrieval/files/13283896/NN_architecture_sketch.pdf)
 For each of 10 altitude levels between 8.5 km and 13 km, three nerual networks have been trained on different random subsamples of the same training/testing dataset.
 Last one was created by a coupled model set-up of ICON and PAMTRA. The final retrieval outputs an average of the three networks trained at the altitude level closest to the actual HAMP observation. Detailed information about the retrieval and its development can be found in the master's thesis document.
 
@@ -20,6 +20,7 @@ To apply the retrieval on the HALO-AC3 HAMP radiometer observations, you only ne
   - xarray
   - tensorflow
   - glob
+
 as well as the HAMP radiometer data (no public server so far).
 
 To retrieve the IWP from the HAMP radiometer (=brightness temperature) observations you have to `from nn_iwp_retrieval import retrieve_IWP` and use the retrieval function as `retrieve_IWP(HAMP_TBs,HAMP_alt)`.
