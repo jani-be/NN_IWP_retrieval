@@ -1,6 +1,4 @@
 # NN_IWP_retrieval
-Neural-network-based ice water path retrieval for the passive airborne microwave observations of HAMP, conducted during the HALO-AC3 campaign
-
 This repository contains all necassary files of the neural-network-based IWP retrieval for the HALO-AC3 observations. In general, the retrieval consists of 30 identical neural networks having the following architecture:
 
 <img width="594" alt="Screenshot 2023-11-07 at 18 17 49" src="https://github.com/MaxRing96/NN_IWP_retrieval/assets/62293752/a9208f42-d2eb-40bc-ac96-d002d60f22cc">
