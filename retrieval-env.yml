@@ -1,0 +1,7 @@
+name: retrievals
+dependencies:
+   - pandas
+   - scipy
+   - matplotlib
+   - xarray
+   - netCDF4 
