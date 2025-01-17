@@ -19,6 +19,8 @@ from pyPamtra import meteoSI
 
 #%%
 
+#NAME UNDER WHICH TO SAFE RUNS
+output_name = "test_factor_100_new_rh"
 # file paths
 DATE= "0829"
 path_sim = "/work/mh0492/m301067/orcestra/icon-mpim/build-lamorcestra/experiments/"
@@ -462,13 +464,13 @@ pam.runParallelPamtra(
 
 # save pamtra simulation results to netcdf file
 pam.writeResultsToNetCDF(
-    f'/work/um0203/u301032/PAMTRA_output/PAMTRA-ICON_{DATE}_test_factor_100.nc',
+    f'/work/um0203/u301032/PAMTRA_output/PAMTRA-ICON_{DATE}_{output_name}.nc',
     xarrayCompatibleOutput=True)
 #/work/um0203/u301238/PAMTRA/PAMTRA_NN_training_data/PAMTRA-ICON_{DATE}_4000rndm-profiles_all_hamp_freqs_v4.nc
 # save integrated values of hydrometeors and water vapor to numpy array
 bulk_values = np.concatenate((np.squeeze(pam.p['hydro_wp']),pam.p['iwv']),axis=1).shape
 #np.save(f'/work/um0203/u301238/PAMTRA/PAMTRA_NN_training_data/PAMTRA-ICON_{DATE}_4000rndm-profiles_bulk_values_v5',bulk_values)
-np.save(f'/work/um0203/u301032/PAMTRA_output/PAMTRA-ICON_{DATE}_test_factor_100_bulk_values_v5',bulk_values)
+np.save(f'/work/um0203/u301032/PAMTRA_output/PAMTRA-ICON_{DATE}_{output_name}_bulk_values_v5',bulk_values)
 
 print("")
 print("*** PAMTRA simulation finished and netcdf files saved ***")
