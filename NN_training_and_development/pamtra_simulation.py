@@ -294,7 +294,7 @@ cwc = flatten_2D_array_manually(hyd.qc) #
 crc = flatten_2D_array_manually(rain.qr) #
 q = flatten_2D_array_manually(hyd.qv)
 
-rh=meteoSI.q2rh(q,t,p)
+rh=100*meteoSI.q2rh(q,t,p)
 #rh = 26.3 * p * q * 1/(np.exp((17.67*(t-273.16))/(t-29.65)))/10000
 print("2D arrays are flattened.")
 #%%
