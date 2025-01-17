@@ -5,3 +5,4 @@ dependencies:
    - matplotlib
    - xarray
    - netCDF4 
+   - pyPamtra

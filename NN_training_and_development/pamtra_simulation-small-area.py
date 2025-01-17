@@ -6,20 +6,19 @@ import xarray as xr
 from netCDF4 import Dataset
 import random
 
-#from metpy.calc import relative_humidity_from_specific_humidity
-#from metpy.units import units
+from metpy.calc import relative_humidity_from_specific_humidity
+from metpy.units import units
 
 import sys
 sys.path.append('/home/u/u301032/pamtra/pamtra/python/pyPamtra')
 import pyPamtra
-from pyPamtra import meteoSI
 
 
 
 
 #%%
 
-# file paths
+# file pathsl
 DATE= "0829"
 path_sim = "/work/mh0492/m301067/orcestra/icon-mpim/build-lamorcestra/experiments/"
 path = path_sim + f"orcestra_1250m_{DATE}/"
@@ -33,6 +32,7 @@ meshname = "ORCESTRA_1250m_DOM01"
 frac_land_file= path + "bc_land_frac.nc"
 #SST_file = path + "bc_sst.nc"
 twodim_file = path + f"orcestra_1250m_{DATE}_atm_2d_ml_DOM01_2024{DATE}T000000Z.nc"
+
 
 # reading files
 grid = xr.open_dataset(meshdir+meshname+".nc")
@@ -59,81 +59,6 @@ rain = rain.isel(time=72) # 2024-08-29T12:00:00
 #thermodyn=thermodyn.isel(time=slice(5))
 
 
-#%% Index, spatial
-
-lat = np.rad2deg(grid.clat.to_pandas())
-
-lon=np.rad2deg(grid.clon.to_pandas())
-
-#7.344833, -26.471667
-s_lat = 2.5
-s_lon = -27.378
-n_lon= -24.276
-n_lat=18.581
-
-dif_lat = n_lat -s_lat
-dif_lon = n_lon -s_lon
-m= dif_lat/dif_lon
-t = s_lat-m*s_lon
-
-####
-lat=lat[(lat <= n_lat )&(lat >= s_lat)]
-lon=lon[(lon <= n_lon)&(lon >= s_lon)]
-common_idx=lon.index.intersection(lat.index)
-#idx_subsample=random.sample(sorted(common_idx.to_numpy()),8000)
-
-idx_list=common_idx.to_list()
-#Reducing data size by factor 100
-common_idx=idx_list[0::100]
-#%% If random sample is wished
-
-'''
-#arr = np.zeros(len(common_idx))
-#i=0
-#while i <= len(common_idx):
-#    arr[i] = 1
-#    i=i+100
-
-#bool_arr = np.array(arr, dtype='bool') 
-
-#new_idx = common_idx.where(bool_arr).dropna()
-
-#common_idx= new_idx.astype('int64') 
-#idx_subsample=sorted(random.sample(sorted(common_idx),8000))
-#new_idx = common_idx.where(common_idx.isin(idx_subsample)) #funktioniert nicht
-
-#lat=lat[(lat <= 13)&(lat >= 12.9)]
-#lon=lon[(lon <= - 55.9)&(lon >= -56)]
-#common_idx = lon.index.intersection(lat.index) 
-#SAMPLESIZE= len(common_idx) #80
-
-##
-for i_lat in np.arange(s_lat -0.6,n_lat-0.6,1):
-    for i_lon in np.arange(s_lon -0.6,n_lon-0.6,1):
-        i_lat
-        i_lon
-        lat_idx=lat[(lat <= i_lat + 1.2)&(lat >= i_lat)]
-        lon_idx=lon[(lon <= i_lon +1.2)&(lon >= i_lon)]
-        i_common_idx=lon_idx.index.intersection(lat_idx.index)
-        len(i_common_idx)
-        len(common_idx)
-        common_idx=common_idx.union(i_common_idx)
-
-
-###
-
-
-#lat=lat[(lat <= 17.5)&(lat >= 2.5)]
-#lon=lon[(lon <= n_lon)&(lon >= s_lon)]
-#common_idx = lon.index.intersection(lat.index) 
-# random.sample(common_idx,4000)
-'''
-#%%
-SAMPLESIZE= len(common_idx) #n_spatial
-
-print(SAMPLESIZE)
-
-
 #for only onbe timestep
 dt_time = hyd.time.values
 unix_time = dt_time.astype('datetime64[s]').astype('int')
@@ -146,10 +71,8 @@ unix_time = dt_time.astype('datetime64[s]').astype('int')
 #    for i in range(len(dt_time))])
 
 #Auswahl von Profilen um Faktor 10 kleiner #TODO überlegen wieviele Slices tatsächlich wählen
-
-n_spatial = SAMPLESIZE
-time = np.zeros([n_spatial])
-time[0:n_spatial] = unix_time#unix_time[0]
+time = np.zeros([80])
+time[0:80] = unix_time#unix_time[0]
 #time[100:200] = unix_time[1]
 #time[200:300] = unix_time[2]
 #time[300:400] = unix_time[3]
@@ -157,13 +80,23 @@ time[0:n_spatial] = unix_time#unix_time[0]
 #time[500:600] = unix_time[5]
 
 
+lat = np.rad2deg(grid.clat.to_pandas())
+
+lon=np.rad2deg(grid.clon.to_pandas())
+
+#7.344833, -26.471667
+lat=lat[(lat <= 13)&(lat >= 12.9)]
+lon=lon[(lon <= - 55.9)&(lon >= -56)]
+common_idx = lon.index.intersection(lat.index) 
+SAMPLESIZE= len(common_idx) #80
 """
 >>> common_idx
 Int64Index([1959543, 1959546, 1959547, 1959548, 1959549, 1959550, 1959551,
             1959552, 1959553, 1959554, 1959555, 1963313, 1963314, 1963315,
             1963316, 1963317, 1963318, 1963319, 1963320, 1963321, 1963322,
             1963323, 1963324, 1963325, 1963326, 1967083, 1967084, 1967085,
-            1967086, 1967087, 1967088, 1967089, 1967090, 1967091, 1967092,
+            1967086, 1967087, 1967088, 1
+module load pytorch967089, 1967090, 1967091, 1967092,
             1967093, 1967094, 1967095, 1967096, 1970853, 1970854, 1970855,
             1970856, 1970857, 1970858, 1970859, 1970860, 1970861, 1970862,
             1970863, 1970864, 1970865, 1970866, 1974623, 1974624, 1974625,
@@ -173,28 +106,16 @@ Int64Index([1959543, 1959546, 1959547, 1959548, 1959549, 1959550, 1959551,
             1978403, 1978404, 1978406],
            dtype='int64', name='cell')
 """
-
-#%%
-hyd=hyd.drop_dims("bnds") 
-thermodyn=thermodyn.drop_dims("bnds")
-#sst = sst.drop_dims("nv")
-frac_land = frac_land.drop_dims("nv")
-rain = rain.drop_dims("bnds")
-
-
-#hyd=hyd.isel(ncells=common_idx)
-hyd=hyd.sel(ncells=common_idx)
-thermodyn=thermodyn.sel(ncells=common_idx)
-
-# oder thermodyn=thermodyn.sel(ncells=common_idx)
-rain = rain.sel(ncells=common_idx)
-grid=grid.sel(cell=common_idx)
-height=height.sel(ncells=common_idx) 
+hyd=hyd.isel(ncells=common_idx)
+thermodyn=thermodyn.isel(ncells=common_idx)
+rain = rain.isel(ncells=common_idx)
+grid=grid.isel(cell=common_idx)
+height=height.isel(ncells=common_idx) 
 #sst=sst.isel(cell=common_idx)  # 
-twodim = twodim.sel(ncells=common_idx)
-frac_land = frac_land.sel(cell = common_idx)
+twodim = twodim.isel(ncells=common_idx)
+frac_land = frac_land.isel(cell = common_idx)
 
-height = height.sel(height_2 = range(35,91))
+height = height.isel(height_2 = range(34,90))
 
 # seamask beachtne
 
@@ -221,9 +142,6 @@ height = height.sel(height_2 = range(35,91))
 #thermodyn=thermodyn.sel(ncells=rndm_ocean_profiles)
 #grid=grid.sel(ncells=rndm_ocean_profiles)
 
-
-
-
 def flatten_1D_array_manually(ds):
     arr=ds.values[:]
     #arr = np.zeros([80])
@@ -235,9 +153,8 @@ def flatten_1D_array_manually(ds):
     #arr[500:600] = ds.isel(time=5).values[:]
     return arr
 
-def flatten_2D_array_manually_old(ds):
-    A = ds.values
-    arr=np.fliplr(np.transpose(A)) #das muss ich umdrehem #
+def flatten_2D_array_manually(ds):
+    arr=np.fliplr(np.transpose(ds.values[:,:])) #das muss ich umdrehem
     
     #arr = np.zeros([80,56])
     #arr[0:80,:] = ds.isel(time=0).values[:,:]
@@ -248,42 +165,22 @@ def flatten_2D_array_manually_old(ds):
     #arr[500:600,:] = ds.isel(time=5).values[:,:]
     return arr
 
-def flatten_2D_array_manually(ds, dim="height"):
-    #arr=np.fliplr(np.transpose(ds.values[:,:])) #das muss ich umdrehem
-    #ds =hyd.sel(ncells=common_idx).qv 
-    arr = np.zeros([SAMPLESIZE,56])
-    h=np.arange(35.,91.,1)
-    if dim=="height":
-        for i in range(len(h)):
-            A=ds.sel(height=h[i]).values  #or ds.isel(height=i).values
-            arr[:,len(h)-i-1] = A#np.transpose(A)
-            #arr[:,i] = np.transpose(ds.sel(height=h[i]).to_numpy()) #other option
-    else:
-        for i in range(len(h)):
-            A=ds.sel(height_2=h[i]).values  #or ds.isel(height=i).values
-            arr[:,len(h)-i-1] = A#np.transpose(A)
-            #arr[:,i] = np.transpose(ds.sel(height=h[i]).to_numpy()) #other option 
-    return arr
+hyd=hyd.drop_dims("bnds") 
+thermodyn=thermodyn.drop_dims("bnds")
+#sst = sst.drop_dims("nv")
+frac_land = frac_land.drop_dims("nv")
+rain = rain.drop_dims("bnds")
 
-#ds =hyd.sel(ncells=common_idx).qv 
-#test1=flatten_2D_array_manually(ds)
-#test2=flatten_2D_array_manually_old(ds)
-#%%
+
+#Zwischenspeichern  ?
 t_g = flatten_1D_array_manually(twodim.ts)
 #sst = flatten_1D_array_manually(sst.SST) 
 u10 = flatten_1D_array_manually(twodim.uas)[0]
 v10 = flatten_1D_array_manually(twodim.vas)[0]
 fr_land = flatten_1D_array_manually(frac_land.land)
 #fr_seaice = flatten_1D_array_manually(ICON_input.fract_glace)
-print("1D arrays are flattened.")
 
-
-
-#%%
-
-z = flatten_2D_array_manually(height.zg,"height_2") 
-print("zg has been flattened.")
-
+z = flatten_2D_array_manually(height.zg) 
 p = flatten_2D_array_manually(thermodyn.pfull)
 t = flatten_2D_array_manually(thermodyn.ta)
 #rh = flatten_2D_array_manually(thermodyn.rh) 
@@ -292,13 +189,11 @@ csc = flatten_2D_array_manually(hyd.qs) #
 cgc = flatten_2D_array_manually(hyd.qg) #
 cwc = flatten_2D_array_manually(hyd.qc) #
 crc = flatten_2D_array_manually(rain.qr) #
-q = flatten_2D_array_manually(hyd.qv)
+#rh = 26.3 * p * q * 1/(np.exp((17.67(T-273.16))/(T-29.65)))
+rh = 100* relative_humidity_from_specific_humidity(thermodyn.pfull,thermodyn.ta , hyd.qv)
+#rh = relative_humidity_from_specific_humidity(thermodyn.pfull * units.hPa,thermodyn.ta * units.degC, hyd.qv).to('percent')
+rh = flatten_2D_array_manually(rh)
 
-rh=meteoSI.q2rh(q,t,p)
-#rh = 26.3 * p * q * 1/(np.exp((17.67*(t-273.16))/(t-29.65)))/10000
-print("2D arrays are flattened.")
-#%%
-'''
 # combine all atmospheric composition parameters to one array for saving
 atm_comp = np.zeros([len(time),56,4])
 #atm_comp[:,:,0] = np.full([len(time),150],height)[:,:]
@@ -306,7 +201,7 @@ atm_comp[:,:,0] = z[:,:]
 atm_comp[:,:,1] = p[:,:]
 atm_comp[:,:,2] = t[:,:]
 atm_comp[:,:,3] = rh[:,:]
-'''
+
 # set all hydrometeor nan-values to zero
 cic[np.isnan(cic)]=0.
 csc[np.isnan(csc)]=0.
@@ -328,7 +223,7 @@ hydro_cmpl[:,:,4] = cgc[:,:] #specific cloud graupel content
 lons = flatten_1D_array_manually(grid.clat)
 lats = flatten_1D_array_manually(grid.clon)
 
-print("start of pamtra")
+
 # PAMTRA SIMULATION
 
 # create pamtra dictionairy containing all model input data for the pamtra simulation
@@ -367,11 +262,11 @@ pamData["obs_height"][:,:,:] = flight_levels
 #pamData["obs_height"] = np.full([len(time),1],12500.)[:,:]
 
 #testing dict
-print("pamData filled")
+
 #print(for key in pamData.keys(): pamData[key].shape)
 
 # Save
-#np.save('/home/u/u301032/orcestra/NN_IWP_retrieval/NN_training_and_development/pamData_test_factor_10.npy', pamData) 
+np.save('/home/u/u301032/orcestra/NN_IWP_retrieval/NN_training_and_development/pamData.npy', pamData) 
 
 
 # Load
@@ -462,15 +357,14 @@ pam.runParallelPamtra(
 
 # save pamtra simulation results to netcdf file
 pam.writeResultsToNetCDF(
-    f'/work/um0203/u301032/PAMTRA_output/PAMTRA-ICON_{DATE}_test_factor_100.nc',
+    f'/work/um0203/u301032/PAMTRA_output/PAMTRA-ICON_{DATE}_test_small_area.nc',
     xarrayCompatibleOutput=True)
 #/work/um0203/u301238/PAMTRA/PAMTRA_NN_training_data/PAMTRA-ICON_{DATE}_4000rndm-profiles_all_hamp_freqs_v4.nc
 # save integrated values of hydrometeors and water vapor to numpy array
 bulk_values = np.concatenate((np.squeeze(pam.p['hydro_wp']),pam.p['iwv']),axis=1).shape
 #np.save(f'/work/um0203/u301238/PAMTRA/PAMTRA_NN_training_data/PAMTRA-ICON_{DATE}_4000rndm-profiles_bulk_values_v5',bulk_values)
-np.save(f'/work/um0203/u301032/PAMTRA_output/PAMTRA-ICON_{DATE}_test_factor_100_bulk_values_v5',bulk_values)
+np.save(f'/work/um0203/u301032/PAMTRA_output/PAMTRA-ICON_{DATE}_test_small_area_bulk_values_v5',bulk_values)
 
 print("")
 print("*** PAMTRA simulation finished and netcdf files saved ***")
 print("")
-# %%
