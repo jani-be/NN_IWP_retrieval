@@ -25,7 +25,9 @@ ds_halo_iwv=xr.open_dataset("ipns://latest.orcestra-campaign.org/products/HALO/i
 
 #%% Reading pamtra simulation
 
-file_pamtra = "/work/um0203/u301032/PAMTRA_output/PAMTRA-ICON_0829_test_factor_100.nc"
+file_pamtra = "/work/um0203/u301032/PAMTRA_output/PAMTRA-ICON_0829_test_factor_100_new_rh.nc"
+
+file_pamtra2 = "/work/um0203/u301032/PAMTRA_output/PAMTRA-ICON_0829_test_factor_100.nc"
 ds_pamtra=xr.open_dataset(file_pamtra, engine="netcdf4")
 
 # select "nadir looking" BTs
@@ -79,15 +81,15 @@ def density_scatter( x , y, ax = None, sort = True, bins = 20,title="title",xlab
 
 #%% Comparison 
 #plotting the values:
-ds_halo.sel(frequency =90).TBs.plot.line(x="time")
-plt.show()
+#ds_halo.sel(frequency =90).TBs.plot.line(x="time")
+#plt.show()
 
 #First histograms
-ds_halo.sel(frequency =90).TBs.plot.hist()
-plt.show()
+#ds_halo.sel(frequency =90).TBs.plot.hist()
+#plt.show()
 
-ds_pamtra.sel(frequency =90,outlevel=2).tb.plot.hist()
-plt.show()
+#ds_pamtra.sel(frequency =90,outlevel=2).tb.plot.hist()
+#plt.show()
 
 # Histograms of halo and pamtra for all frequencies 
 for freq in np.asarray(ds_halo.frequency):
@@ -114,21 +116,22 @@ plt.show()
 
 # Scatter Plots TB Pamtra vs TB HAMP
 #reducing hamp values
-x=ds_halo.sel(frequency =freq).TBs.to_numpy()
-data=np.random.choice(x[~np.isnan(x)],3887)
+
 
 for freq in np.asarray(ds_halo.frequency):
+  x=ds_halo.sel(frequency =freq).TBs.to_numpy()
+  data=np.random.choice(x[~np.isnan(x)],3887)
   density_scatter(data,ds_pamtra.sel(frequency =freq,outlevel=1).tb,xlabel="HAMP TB [K]",ylabel="PAMTRA TB [K]",title=freq, bins = [30,30] )
 
 # Scatter IWV from halo and pamtra AND SIMULATIONS
 x=ds_halo_iwv.IWV.to_numpy()
 data_iwv=np.random.choice(x[~np.isnan(x)],3887)
-density_scatter(data_iwv,100*ds_pamtra.sel(outlevel=1).iwv,lim=(0,100),xlabel="HAMP",ylabel="PAMTRA",title="IWV [kg/m^2]", bins = [30,30] )
+density_scatter(data_iwv,ds_pamtra.sel(outlevel=1).iwv,lim=(0,100),xlabel="HAMP",ylabel="PAMTRA",title="IWV [kg/m^2]", bins = [30,30] )
 plt.show()
 icon_pwr=ds_icon.isel(time=72).sel(ncells=common_idx).drop_dims("height_2").prw
 density_scatter(data_iwv,icon_pwr,lim=(0,100),xlabel="HAMP",ylabel="ICON",title="IWV [kg/m^2]", bins = [30,30] )
 plt.show()
-density_scatter(icon_pwr,100*ds_pamtra.sel(outlevel=1).iwv,lim=(0,100),xlabel="ICON ",ylabel="PAMTRA",title="IWV [kg/m^2]", bins = [30,30] )
+density_scatter(icon_pwr,ds_pamtra.sel(outlevel=1).iwv,lim=(0,100),xlabel="ICON ",ylabel="PAMTRA",title="IWV [kg/m^2]", bins = [30,30] )
 plt.show()
 
 
