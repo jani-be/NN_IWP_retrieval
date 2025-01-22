@@ -6,6 +6,7 @@ Comparing pamtra simulation and halo data
 #%% Loading packages
 import numpy as np
 import xarray as xr
+import pandas as pd
 import matplotlib.pyplot as plt
 import fsspec
 from matplotlib import cm
@@ -18,10 +19,70 @@ DATE ="0829"
 fs = fsspec.filesystem("ipns")
 print(fs.glob("ipns://latest.orcestra-campaign.org/products/HALO/radiometer/*.zarr"))
 file_flight_0829="ipns://latest.orcestra-campaign.org/products/HALO/radiometer/HALO-20240829a.zarr"
+file_altitude = 'ipns://latest.orcestra-campaign.org/products/HALO/position_attitude/HALO-20240829a.zarr'
 
 ds_halo=xr.open_dataset(file_flight_0829,engine="zarr")
+
+ds_halo_altitude = xr.open_dataset(file_altitude,engine ="zarr")
 ds_halo_iwv=xr.open_dataset("ipns://latest.orcestra-campaign.org/products/HALO/iwv/HALO-20240829a.zarr",
                 engine="zarr")
+
+
+
+
+#%% Ermitteln der Flughöhen
+files_altitude = 'ipns://latest.orcestra-campaign.org/products/HALO/position_attitude/*.zarr'
+#ds=xr.open_mfdataset(files_altitude,engine="zarr")
+
+ds_altitude=[]
+list_a=(fs.glob("ipns://latest.orcestra-campaign.org/products/HALO/position_attitude/*"))
+[ds_altitude.append(xr.open_dataset("ipns://"+i,
+                engine="zarr"))for i in list_a]
+ds_altitude=xr.concat([xr.open_dataset("ipns://"+i,
+                engine="zarr")for i in list_a],dim="time")
+
+
+bins = np.arange(50,15060,100)
+(n2, bins2, patches) = plt.hist(ds_altitude.alt, bins, label='hst')
+df=pd.DataFrame({"counts":n2,"middle":bins2[:-1]+50})
+df=df[(df["middle"]>=8000)]
+
+df["rank"]=df["counts"].rank(ascending=False)
+df.sort_values("counts", inplace = True) 
+
+plt.stairs(n2, bins2,fill=True)
+heights =[15000.0	,12800.0,12500.0,13600.0,12700.0,14000.0,12600.0,11400.0,13000.0,13800.0,13200.0, 14500.0,13300.0,14400.0,13900.0]
+plt.legend()
+plt.title("simulation levels v1")
+plt.xlim(10000,15500)
+plt.vlines(heights,ymin=0,ymax=15000000, color="red")
+plt.show()
+
+plt.stairs(n2, bins2,fill=True)
+heights =[11900,15000.0	,13600.0,12600.0,11400.0,13000.0,13250.0,14450.0,13900.0]
+
+heights =[11900,15000.0	,13600.0,12600.0,11400.0,13000.0,13200.0, 14500.0,13300.0,14400.0,13900.0]
+plt.legend()
+plt.title("simulation levels v2")
+plt.xlim(7000,15500)
+plt.vlines(heights,ymin=0,ymax=15000000, color="red")
+plt.show()
+
+bins = np.arange(9000,15060,30)
+(n2, bins2, patches) = plt.hist(ds_altitude.alt, bins, label='hst')
+plt.stairs(n2, bins2,fill=True)
+heights =[11900,15000.0	,13600.0,12600.0,11400.0,13000.0,13250.0,14450.0,13900.0]
+plt.legend()
+plt.title("simulation levels v2")
+plt.xlim(11000,15500)
+plt.vlines(heights,ymin=0,ymax=5000000, color="red")
+plt.show()
+
+
+
+
+
+
 
 #%% Reading pamtra simulation
 
@@ -93,7 +154,7 @@ def density_scatter( x , y, ax = None, sort = True, bins = 20,title="title",xlab
 
 # Histograms of halo and pamtra for all frequencies 
 for freq in np.asarray(ds_halo.frequency):
-  plt.hist([ds_pamtra.sel(frequency =freq,outlevel=1).tb,ds_halo.sel(frequency =freq).TBs],density=True,label=["pamtra","halo"])
+  plt.hist([ds_pamtra.sel(frequency =freq,outlevel=3).tb,ds_halo.sel(frequency =freq).TBs],density=True,label=["pamtra","halo"])
   plt.legend()
   plt.title(str(freq))
   plt.show()
@@ -101,15 +162,15 @@ for freq in np.asarray(ds_halo.frequency):
 
 # Logarithmic Histograms of halo and pamtra for all frequencies 
 for freq in np.asarray(ds_halo.frequency):
-  plt.hist([ds_pamtra.sel(frequency =freq,outlevel=1).tb,ds_halo.sel(frequency =freq).TBs],density=True,label=["pamtra","halo"],log=True)
+  plt.hist([ds_pamtra.sel(frequency =freq,outlevel=3).tb,ds_halo.sel(frequency =freq).TBs],density=True,label=["pamtra","halo"],log=True)
   plt.legend()
   plt.title(str(freq))
   plt.show()
 
 
 # Histogram of halo and pamtra for a chosen frequency
-freq =90
-plt.hist([ds_pamtra.sel(frequency =freq,outlevel=1).tb,ds_halo.sel(frequency =freq).TBs],density=True,label=["pamtra TB","halo TB "])
+freq = 58.
+plt.hist([ds_pamtra.sel(frequency =freq,outlevel=3).tb,ds_halo.sel(frequency =freq).TBs],density=True,label=["pamtra TB","halo TB "])
 plt.legend()
 plt.title(str(freq))
 plt.show()
@@ -121,17 +182,18 @@ plt.show()
 for freq in np.asarray(ds_halo.frequency):
   x=ds_halo.sel(frequency =freq).TBs.to_numpy()
   data=np.random.choice(x[~np.isnan(x)],3887)
-  density_scatter(data,ds_pamtra.sel(frequency =freq,outlevel=1).tb,xlabel="HAMP TB [K]",ylabel="PAMTRA TB [K]",title=freq, bins = [30,30] )
+  density_scatter(data,ds_pamtra.sel(frequency =freq,outlevel=3).tb,xlabel="HAMP TB [K]",ylabel="PAMTRA TB [K]",title=freq, bins = [30,30] )
 
+#%%
 # Scatter IWV from halo and pamtra AND SIMULATIONS
 x=ds_halo_iwv.IWV.to_numpy()
 data_iwv=np.random.choice(x[~np.isnan(x)],3887)
-density_scatter(data_iwv,ds_pamtra.sel(outlevel=1).iwv,lim=(0,100),xlabel="HAMP",ylabel="PAMTRA",title="IWV [kg/m^2]", bins = [30,30] )
+density_scatter(data_iwv,ds_pamtra.sel(outlevel=3).iwv,lim=(0,100),xlabel="HAMP",ylabel="PAMTRA",title="IWV [kg/m^2]", bins = [30,30] )
 plt.show()
 icon_pwr=ds_icon.isel(time=72).sel(ncells=common_idx).drop_dims("height_2").prw
 density_scatter(data_iwv,icon_pwr,lim=(0,100),xlabel="HAMP",ylabel="ICON",title="IWV [kg/m^2]", bins = [30,30] )
 plt.show()
-density_scatter(icon_pwr,ds_pamtra.sel(outlevel=1).iwv,lim=(0,100),xlabel="ICON ",ylabel="PAMTRA",title="IWV [kg/m^2]", bins = [30,30] )
+density_scatter(icon_pwr,ds_pamtra.sel(outlevel=3).iwv,lim=(0,100),xlabel="ICON ",ylabel="PAMTRA",title="IWV [kg/m^2]", bins = [30,30] )
 plt.show()
 
 
