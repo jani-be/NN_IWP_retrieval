@@ -1,5 +1,6 @@
 '''
 Comparing pamtra simulation and halo data
+plus choosing of flight levels
 '''
 
 
@@ -43,7 +44,7 @@ ds_altitude=xr.concat([xr.open_dataset("ipns://"+i,
 
 
 bins = np.arange(50,15060,100)
-(n2, bins2, patches) = plt.hist(ds_altitude.alt, bins, label='hst')
+(n2, bins2, patches) = plt.hist(ds_altitude.alt, bins)
 df=pd.DataFrame({"counts":n2,"middle":bins2[:-1]+50})
 df=df[(df["middle"]>=8000)]
 
@@ -58,31 +59,16 @@ plt.xlim(10000,15500)
 plt.vlines(heights,ymin=0,ymax=15000000, color="red")
 plt.show()
 
-plt.stairs(n2, bins2,fill=True)
-heights =[11900,15000.0	,13600.0,12600.0,11400.0,13000.0,13250.0,14450.0,13900.0]
-
-heights =[11900,15000.0	,13600.0,12600.0,11400.0,13000.0,13200.0, 14500.0,13300.0,14400.0,13900.0]
-plt.legend()
-plt.title("simulation levels v2")
-plt.xlim(7000,15500)
-plt.vlines(heights,ymin=0,ymax=15000000, color="red")
-plt.show()
-
 bins = np.arange(9000,15060,30)
-(n2, bins2, patches) = plt.hist(ds_altitude.alt, bins, label='hst')
+(n2, bins2, patches) = plt.hist(ds_altitude.alt, bins)#,density=True
+plt.show()
 plt.stairs(n2, bins2,fill=True)
 heights =[11900,15000.0	,13600.0,12600.0,11400.0,13000.0,13250.0,14450.0,13900.0]
 plt.legend()
 plt.title("simulation levels v2")
 plt.xlim(11000,15500)
-plt.vlines(heights,ymin=0,ymax=5000000, color="red")
+plt.vlines(heights,ymin=0,ymax=n2.max(), color="red")
 plt.show()
-
-
-
-
-
-
 
 #%% Reading pamtra simulation
 
