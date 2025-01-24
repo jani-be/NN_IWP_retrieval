@@ -1,15 +1,17 @@
 """
 Colocating Simulation points and HALO flight
 
-spatially
-and
 timewise
+and
+spatially
+
  
 fist for one flight
 
 
 #Output:
 #Index of simulation points
+# Needed Output:
 #time steps
 #-> needed for simulation
 
@@ -63,7 +65,8 @@ month = DATE[0:2]
 t_periods = 5
 t_steps =xr.date_range("2024-"+month+"-"+day+" 9:45:00",periods=t_periods,freq="2h")
 
-time_intervals=np.concatenate([xr.date_range(t,freq="2s",periods =900)for t in t_steps])
+time_intervals=np.concatenate([xr.date_range(t,freq="1min",periods =30)for t in t_steps])
+#time_intervals=np.concatenate([xr.date_range(t,freq="2s",periods =900)for t in t_steps])
 # hier halo samplen? außerdem mehr als 15 min verbieten
 
 ds_halo=ds_halo.sel(time=time_intervals,method="nearest")
@@ -117,7 +120,7 @@ nn_d=[]
 [nn_d.append(find_nn(ICON_lon,ICON_lat,lon,lat)) for lon, lat in zip(ds_halo.lon, ds_halo.lat)] 
 ####
 
-np.safe("/home/u/u301032/orcestra/NN_IWP_retrieval/NN_training_and_development/cells_0824.npy",np.array(nn_d))
+np.save("/home/u/u301032/orcestra/NN_IWP_retrieval/NN_training_and_development/cells_0824.npy",np.array(nn_d))
 #%% Choosing time reduction
 #maximum 30 min?
 

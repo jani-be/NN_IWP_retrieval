@@ -130,8 +130,26 @@ def density_scatter( x , y, ax = None, sort = True, bins = 20,title="title",xlab
 #plotting the values:
 #ds_halo.sel(frequency =90).TBs.plot.line(x="time")
 #plt.show()
+# Calculation of bias
+#bias= np.mean(sim) - np.mean()
 
-#First histograms
+ds_pamtra.sel(outlevel=3).tb.mean("grid_x")
+ds_halo.TBs.mean("time")
+frequencies = ds_halo.frequency
+bias=ds_pamtra.sel(frequency=frequencies,outlevel=3).tb.mean("grid_x")-ds_halo.TBs.mean("time")
+
+
+bias.to_pandas()
+
+#df=pd.DataFrame({"frequency":frequencies,"bias":bias})
+#Calculation of percentiles
+pamtra_percentile=ds_pamtra.sel(frequency=frequencies,outlevel=3).tb.quantile([0.01,0.25,0.50,0.75,0.99],dim="grid_x")
+halo_percentile=ds_halo.TBs.quantile([0.01,0.25,0.50,0.75,0.99],dim="time")
+
+(halo_percentile.to_pandas())
+(pamtra_percentile.to_pandas())
+print("difference percentile  halo - pamtra")
+(halo_percentile.to_pandas())-(pamtra_percentile.to_pandas())#First histograms
 #ds_halo.sel(frequency =90).TBs.plot.hist()
 #plt.show()
 
