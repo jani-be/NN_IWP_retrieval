@@ -29,6 +29,39 @@ ds_halo_iwv=xr.open_dataset("ipns://latest.orcestra-campaign.org/products/HALO/i
                 engine="zarr")
 
 
+#%% Halo Ice peak analysis
+# which flights are particulary interesting? From all and the golden days
+# how well are the reruns?
+
+#reading g band data
+ds_hamp_list=[]
+list_a=(fs.glob("ipns://latest.orcestra-campaign.org/products/HALO/radiometer/*"))
+[ds_hamp_list.append(xr.open_dataset("ipns://"+i,
+                engine="zarr"))for i in list_a]
+ds_hamp=xr.concat([xr.open_dataset("ipns://"+i,
+                engine="zarr")for i in list_a],dim="time")
+#log hist of each day
+
+# Logarithmic Histograms of halo and pamtra for all frequencies 
+for freq in np.asarray([183.91, 184.81, 185.81, 186.81, 188.31, 190.81]):
+  plt.hist(ds_hamp.sel(time=slice('2024-08-01','2024-10-01'),frequency =freq).TBs,density=True,log=True,bins=20)
+  plt.legend()
+  plt.title(str(freq))
+  plt.show()
+
+#22 as first 22 flights of campaign (no Oberpfaffenhofen data)
+freq=183.91
+for flightnr in range(23):
+  plt.hist(ds_hamp_list[flightnr].sel(frequency =freq).TBs,density=True,log=True,bins=np.arange(140,320,5))
+  #plt.legend()
+  #plt.title(str(freq)+" GHz "+ str(ds_hamp_list[flightnr].isel(time=0).time)[-19:-9])
+  plt.title(str(ds_hamp_list[flightnr].isel(time=0).time)[-19:-9])
+  
+  plt.xlim(145,310)
+  plt.xlabel("T in K")
+  plt.show()
+
+
 
 
 #%% Ermitteln der Flughöhen
