@@ -74,7 +74,7 @@ list_a=(fs.glob("ipns://latest.orcestra-campaign.org/products/HALO/position_atti
                 engine="zarr"))for i in list_a]
 ds_altitude=xr.concat([xr.open_dataset("ipns://"+i,
                 engine="zarr")for i in list_a],dim="time")
-
+ds_altitude = ds_altitude.sel(time=slice('2024-08-01','2024-10-01'))
 
 bins = np.arange(50,15060,100)
 (n2, bins2, patches) = plt.hist(ds_altitude.alt, bins)
@@ -96,11 +96,12 @@ bins = np.arange(9000,15060,30)
 (n2, bins2, patches) = plt.hist(ds_altitude.alt, bins)#,density=True
 plt.show()
 plt.stairs(n2, bins2,fill=True)
-heights =[11900,15000.0	,13600.0,12600.0,11400.0,13000.0,13250.0,14450.0,13900.0]
-plt.legend()
-plt.title("simulation levels v2")
+heights =[11900,15000.0	,13600.0,12650.0,11400.0,13000.0,13250.0,14450.0,13900.0]
+#plt.legend()
+plt.title("flight levels")
 plt.xlim(11000,15500)
 plt.vlines(heights,ymin=0,ymax=n2.max(), color="red")
+plt.xlabel("height [m]")
 plt.show()
 
 #%% Reading pamtra simulation

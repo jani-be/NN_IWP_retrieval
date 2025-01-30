@@ -1,61 +1,62 @@
 #%%
-
-
 import numpy as np
 import xarray as xr
 from netCDF4 import Dataset
 import random
-
-#from metpy.calc import relative_humidity_from_specific_humidity
-#from metpy.units import units
-
 import sys
 sys.path.append('/home/u/u301032/pamtra/pamtra/python/pyPamtra')
+
 #import pyPamtra
 #from pyPamtra import meteoSI
 
-
-
-
 #%%
-
+# Choose Parameters
+DATE= "0829" 
+DATE = "0824" #"0927"
 #NAME UNDER WHICH TO SAFE RUNS
 output_name = "test_factor_100_new_rh"
-# file paths
+#%% reading file paths
 
 
-DATE= "0829" 
-appendix = ""
-DATE = "0824" #"0927"
-appendix = "-rerun"
+if DATE == "0829":
+    appendix = "-high3Drate"
+else:
+    appendix = "-rerun"
 
 path_sim = "/work/mh0492/m301067/orcestra/icon-mpim/build-lamorcestra/experiments/"
 path = path_sim + f"orcestra_1250m_{DATE+appendix}/"
-hydrometeor_file = path + f"orcestra_1250m_{DATE+appendix}_atm_3d_hydrometeors_DOM01_2024{DATE}T000000Z.nc"
-thermodyn_file = path + f"orcestra_1250m_{DATE+appendix}_atm_3d_thermodynamics_DOM01_2024{DATE}T000000Z.nc"
-path_3d = path_sim + "orcestra_1250m_0829-high3Drate/" 
-height_file = path_3d + "orcestra_1250m_0829-high3Drate_atm_vgrid_ml.nc"
+height_file = path_sim + f"orcestra_1250m_0829-high3Drate/orcestra_1250m_0829-high3Drate_atm_vgrid_ml.nc"
 
 meshdir = "/work/mh0492/m301067/orcestra/auxiliary-files/grids/"
 meshname = "ORCESTRA_1250m_DOM01"
 frac_land_file= path + "bc_land_frac.nc"
-#SST_file = path + "bc_sst.nc"
+
+thermodyn_file = path + f"orcestra_1250m_{DATE+appendix}_atm_3d_thermodynamics_DOM01_2024{DATE}T000000Z.nc"
 twodim_file = path + f"orcestra_1250m_{DATE+appendix}_atm_2d_ml_DOM01_2024{DATE}T000000Z.nc"
 
 if DATE == "0829":
-    rain_file = path_3d + "orcestra_1250m_0829-high3Drate_atm_3d_hydrometeors2_DOM01_20240829T000000Z.nc"
-    rain = xr.open_dataset(rain_file)
+    hydrometeor1_file = path + f"orcestra_1250m_{DATE+appendix}_atm_3d_hydrometeors1_DOM01_2024{DATE}T000000Z.nc"
+    hydrometeor2_file = path + f"orcestra_1250m_{DATE+appendix}_atm_3d_hydrometeors2_DOM01_2024{DATE}T000000Z.nc"
+else:    
+
+    hydrometeor_file = path + f"orcestra_1250m_{DATE+appendix}_atm_3d_hydrometeors_DOM01_2024{DATE}T000000Z.nc"
+
 
 #%%
 # reading files
 grid = xr.open_dataset(meshdir+meshname+".nc")
-hyd = xr.open_dataset(hydrometeor_file)
+
 thermodyn =xr.open_dataset(thermodyn_file)
 height = xr.open_dataset(height_file)
 frac_land= xr.open_dataset(frac_land_file)
 #sst = xr.open_dataset(SST_file) #TODO isel timestamp?? zeit falsch angegeben und nur 12 h schritte
 twodim = xr.open_dataset(twodim_file)
-
+if DATE == "0829":
+    hyd1=  xr.open_dataset(hydrometeor1_file)
+    hyd2=  xr.open_dataset(hydrometeor2_file)
+    hyd=    xr.merge([hyd1,hyd2])
+else:
+    hyd = xr.open_dataset(hydrometeor_file)
 #print(hyd,thermodyn)
 #print(grid)
 # %%%
@@ -63,10 +64,9 @@ twodim = xr.open_dataset(twodim_file)
 # selection of time stamps: 00,04,08,12,16,20, 24, 28, 32, 36 h
 # selection of time = 36:00h
 if DATE == "0829":
-    hyd=hyd.isel(time=3) #sonst 9
-    thermodyn=thermodyn.isel(time=3) #sonst 9
+    thermodyn=thermodyn.isel(time=72) 
     twodim = twodim.isel(time=72)
-    rain = rain.isel(time=72) # 2024-08-29T12:00:00
+    hyd = hyd.isel(time=72) # 2024-08-29T12:00:00
 
 # %%%
 #timestamps for DATE == "0824"
@@ -188,9 +188,6 @@ hyd=hyd.drop_dims("bnds")
 thermodyn=thermodyn.drop_dims("bnds")
 #sst = sst.drop_dims("nv")
 frac_land = frac_land.drop_dims("nv")
-if DATE == "0829":
-    rain = rain.drop_dims("bnds")
-    rain = rain.sel(ncells=common_idx)
 
 
 #hyd=hyd.isel(ncells=common_idx)
@@ -340,7 +337,7 @@ cic = flatten_2D_array_manually(hyd.qi) #hier schon ändern? Vergleich einlesen 
 csc = flatten_2D_array_manually(hyd.qs) #
 cgc = flatten_2D_array_manually(hyd.qg) #
 cwc = flatten_2D_array_manually(hyd.qc) #
-crc = flatten_2D_array_manually(rain.qr) #
+crc = flatten_2D_array_manually(hyd.qr) #
 q = flatten_2D_array_manually(hyd.qv)
 
 rh=100*meteoSI.q2rh(q,t,p)
