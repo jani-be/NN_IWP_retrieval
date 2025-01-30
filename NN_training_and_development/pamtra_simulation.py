@@ -236,15 +236,9 @@ height = height.sel(height_2 = range(35,91))
 
 
 def flatten_1D_array_manually(ds):
-    arr=ds.values[:]
-    #arr = np.zeros([80])
-    #arr[0:80] = ds.isel(time=0).values[:]
-    #arr[100:200] = ds.isel(time=1).values[:]
-    #arr[200:300] = ds.isel(time=2).values[:]
-    #arr[300:400] = ds.isel(time=3).values[:]
-    #arr[400:500] = ds.isel(time=4).values[:]
-    #arr[500:600] = ds.isel(time=5).values[:]
-    return arr
+    return np.concatenate(([(ds.sel(time=t))for t in t_steps ]),axis=0)
+    
+
 
 def flatten_2D_array_manually_old(ds):
     A = ds.values
@@ -281,21 +275,44 @@ def flatten_2D_array_manually(ds, dim="height"):
     #ds =hyd.sel(ncells=common_idx).qv 
     arr = np.zeros([SAMPLESIZE*t_periods,56])
     h=np.arange(35.,91.,1)
-    c=0
     for t in range(t_periods):
         if dim=="height":
             for i in range(len(h)):
                 A=ds.sel(height=h[i],time=t_steps[t]).values  #or ds.isel(height=i).values
                 arr[SAMPLESIZE*t:SAMPLESIZE*(t+1),len(h)-i-1] = A#np.transpose(A)
                 #arr[:,i] = np.transpose(ds.sel(height=h[i]).to_numpy()) #other option
-                c +=1
-                print(c)
         else:
             for i in range(len(h)):
-                A=ds.sel(height_2=h[i],time=t_steps[t]).values  #or ds.isel(height=i).values
+                A=ds.sel(height_2=h[i]).values  #or ds.isel(height=i).values
                 arr[SAMPLESIZE*t:SAMPLESIZE*(t+1),len(h)-i-1] = A#np.transpose(A)
                 #arr[:,i] = np.transpose(ds.sel(height=h[i]).to_numpy()) #other option 
     return arr
+
+def flipheight(ds,dim="height"):
+    arr = np.zeros([SAMPLESIZE,56])
+    h=np.arange(35.,91.,1)
+    if dim=="height":
+        for i in range(len(h)):
+            A=ds.sel(height=h[i]).values  #or ds.isel(height=i).values
+            arr[:,len(h)-i-1] = A#np.transpose(A)
+    return arr
+
+def flatten_2D_array_manually_test(ds, dim="height"):      
+    return np.concatenate(([flipheight(ds.sel(time=t),dim)for t in t_steps ]),axis=0)
+
+
+def flatten_2D_array_manually_height(ds):
+    #arr=np.fliplr(np.transpose(ds.values[:,:])) #das muss ich umdrehem
+    #ds =hyd.sel(ncells=common_idx).qv 
+    arr =  np.zeros([SAMPLESIZE,56])
+    h=np.arange(35.,91.,1)
+    c=0
+    for i in range(len(h)):
+        A=ds.sel(height_2=h[i]).values  #or ds.isel(height=i).values
+        arr[:,len(h)-i-1] = A
+    arr=np.concatenate((t_periods*[arr]))
+    return arr
+
 cic = flatten_2D_array_manually(hyd.qi)
 #ds =hyd.sel(ncells=common_idx).qv 
 #test1=flatten_2D_array_manually(ds)
@@ -313,7 +330,7 @@ print("1D arrays are flattened.")
 
 #%%
 
-z = flatten_2D_array_manually(height.zg,"height_2") #geometric_height_at_full_level_center
+z = flatten_2D_array_manually_height(height.zg) #geometric_height_at_full_level_center
 print("zg has been flattened.")
 
 p = flatten_2D_array_manually(thermodyn.pfull)
