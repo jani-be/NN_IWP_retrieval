@@ -6,15 +6,15 @@ import random
 import sys
 sys.path.append('/home/u/u301032/pamtra/pamtra/python/pyPamtra')
 
-#import pyPamtra
-#from pyPamtra import meteoSI
+import pyPamtra
+from pyPamtra import meteoSI
 
 #%%
 # Choose Parameters
-DATE= "0829" 
-DATE = "0824" #"0927"
+#DATE= "0829" 
+DATE ="0824" # "0927" #
 #NAME UNDER WHICH TO SAFE RUNS
-output_name = "test_factor_100_new_rh"
+output_name = "for_nn_v1"
 #%% reading file paths
 
 
@@ -59,27 +59,48 @@ else:
     hyd = xr.open_dataset(hydrometeor_file)
 #print(hyd,thermodyn)
 #print(grid)
-# %%%
-#timestamps for DATE == "0829"
-# selection of time stamps: 00,04,08,12,16,20, 24, 28, 32, 36 h
-# selection of time = 36:00h
-if DATE == "0829":
-    thermodyn=thermodyn.isel(time=72) 
-    twodim = twodim.isel(time=72)
-    hyd = hyd.isel(time=72) # 2024-08-29T12:00:00
+
 
 # %%%
 #timestamps for DATE == "0824"
 # selection of time stamps: 00,04,08,12,16,20, 24, 28, 32, 36 h
 # selection of time = 36:00h
+
+#Für Colocation : von 8 bis 20:00h
+day = DATE[2:5]
+month = DATE[0:2]
+if DATE == "0829":
+    t_periods = 4
+else:
+    t_periods = 10
+t_steps =xr.date_range("2024-"+month+"-"+day+" 12:00:00",periods=t_periods,freq="4h")
+
+hyd=hyd.sel(time=t_steps) 
+thermodyn=thermodyn.sel(time=t_steps) 
+twodim = twodim.sel(time=t_steps)
+
+"""
 #Für Colocation : von 8 bis 20:00h
 day = str(int(DATE[2:5])+1)
 month = DATE[0:2]
 t_periods = 7
 t_steps =xr.date_range("2024-"+month+"-"+day+" 08:00:00",periods=t_periods,freq="2h")
+
 hyd=hyd.sel(time=t_steps) #sonst 9
 thermodyn=thermodyn.sel(time=t_steps) #sonst 9
 twodim = twodim.sel(time=t_steps)
+
+#or:
+
+#timestamps for DATE == "0829"
+# selection of time stamps: 00,04,08,12,16,20, 24, 28, 32, 36 h
+# selection of time = 36:00h
+
+if DATE == "0829":
+    thermodyn=thermodyn.isel(time=72) 
+    twodim = twodim.isel(time=72)
+    hyd = hyd.isel(time=72) # 2024-08-29T12:00:00
+"""
 
 
 
@@ -108,7 +129,7 @@ common_idx=lon.index.intersection(lat.index)
 
 idx_list=common_idx.to_list()
 #Reducing data size by factor 100
-common_idx=idx_list[0::1000]
+common_idx=idx_list[0::100]
 #%% If random sample is wished
 
 '''
@@ -172,16 +193,9 @@ unix_time = dt_time.astype('datetime64[s]').astype('int')
 #Auswahl von Profilen um Faktor 10 kleiner #TODO überlegen wieviele Slices tatsächlich wählen
 
 n_spatial = SAMPLESIZE
-time = np.zeros([n_spatial])
-time[0:n_spatial] = unix_time#unix_time[0]
-#time[100:200] = unix_time[1]
-#time[200:300] = unix_time[2]
-#time[300:400] = unix_time[3]
-#time[400:500] = unix_time[4]
-#time[500:600] = unix_time[5]
-
-
-
+time = np.zeros([n_spatial*t_periods])
+for i in range(t_periods):
+    time[i*n_spatial:(i+1)*n_spatial] = unix_time[i] #unix_time
 
 #%%
 hyd=hyd.drop_dims("bnds") 
@@ -232,10 +246,14 @@ height = height.sel(height_2 = range(35,91))
 
 
 
-def flatten_1D_array_manually(ds):
+def flatten_1D_array_manually_dimtime(ds):
     return np.concatenate(([(ds.sel(time=t))for t in t_steps ]),axis=0)
     
 
+def flatten_1D_array_manually(ds):
+    arr = ds.values
+    return np.concatenate((t_periods*[arr]))
+    
 
 def flatten_2D_array_manually_old(ds):
     A = ds.values
@@ -315,12 +333,15 @@ cic = flatten_2D_array_manually(hyd.qi)
 #test1=flatten_2D_array_manually(ds)
 #test2=flatten_2D_array_manually_old(ds)
 #%%
-t_g = flatten_1D_array_manually(twodim.ts)
+t_g = flatten_1D_array_manually_dimtime(twodim.ts)
 #sst = flatten_1D_array_manually(sst.SST) 
-u10 = flatten_1D_array_manually(twodim.uas)[0]
-v10 = flatten_1D_array_manually(twodim.vas)[0]
-fr_land = flatten_1D_array_manually(frac_land.land)
+u10 = flatten_1D_array_manually_dimtime(twodim.uas)[0]
+v10 = flatten_1D_array_manually_dimtime(twodim.vas)[0]
+
 #fr_seaice = flatten_1D_array_manually(ICON_input.fract_glace)
+
+fr_land = flatten_1D_array_manually(frac_land.land)
+
 print("1D arrays are flattened.")
 
 
