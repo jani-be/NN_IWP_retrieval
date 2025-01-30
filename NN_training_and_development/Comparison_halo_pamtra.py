@@ -93,7 +93,9 @@ plt.vlines(heights,ymin=0,ymax=15000000, color="red")
 plt.show()
 
 bins = np.arange(9000,15060,30)
-(n2, bins2, patches) = plt.hist(ds_altitude.alt, bins)#,density=True
+(n2, bins2, patches) = plt.hist(ds_altitude.alt, bins,log=True)#,density=True
+heights =[11900,15000.0	,13600.0,12650.0,11400.0,13000.0,13250.0,14450.0,13900.0]
+plt.vlines(heights,ymin=0,ymax=n2.max(), color="red")
 plt.show()
 plt.stairs(n2, bins2,fill=True)
 heights =[11900,15000.0	,13600.0,12650.0,11400.0,13000.0,13250.0,14450.0,13900.0]
