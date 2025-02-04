@@ -11,10 +11,16 @@ from pyPamtra import meteoSI
 
 #%%
 # Choose Parameters
-#DATE= "0829" 
-DATE ="0824" # "0927" #
+DATE= "0829" #"0927" #"0824" #
 #NAME UNDER WHICH TO SAFE RUNS
-output_name = "for_nn_v1"
+output_name = "all_area_v1"
+#Extend of Simulation area:
+s_lat = -2
+w_lon = -62
+e_lon= -16
+n_lat=22
+flight_levels =[11400.0,11900.0,12650.0,13000.0,13250.0,13600.0,13900.0,14450.0,13900.0,15000.0	]
+division_factor =100000 #1000 leads to ~ 6000 n_spatial
 #%% reading file paths
 
 
@@ -38,7 +44,6 @@ if DATE == "0829":
     hydrometeor1_file = path + f"orcestra_1250m_{DATE+appendix}_atm_3d_hydrometeors1_DOM01_2024{DATE}T000000Z.nc"
     hydrometeor2_file = path + f"orcestra_1250m_{DATE+appendix}_atm_3d_hydrometeors2_DOM01_2024{DATE}T000000Z.nc"
 else:    
-
     hydrometeor_file = path + f"orcestra_1250m_{DATE+appendix}_atm_3d_hydrometeors_DOM01_2024{DATE}T000000Z.nc"
 
 
@@ -106,30 +111,32 @@ if DATE == "0829":
 
 #%% Index, spatial
 
-lat = np.rad2deg(grid.clat.to_pandas())
+lat = np.rad2deg(grid.clat.to_pandas()[frac_land.sea.to_pandas()==1])
 
-lon=np.rad2deg(grid.clon.to_pandas())
+lon=np.rad2deg(grid.clon.to_pandas()[frac_land.sea.to_pandas()==1])
 
-#7.344833, -26.471667
-s_lat = 2.5
-s_lon = -27.378
-n_lon= -24.276
-n_lat=18.581
-
-dif_lat = n_lat -s_lat
-dif_lon = n_lon -s_lon
-m= dif_lat/dif_lon
-t = s_lat-m*s_lon
-
-####
-lat=lat[(lat <= n_lat )&(lat >= s_lat)]
-lon=lon[(lon <= n_lon)&(lon >= s_lon)]
+try:    
+    n_lat
+    s_lat,
+    e_lon,
+    w_lon
+except:
+    print("no complete definiton of lon and lat area")    
+else:
+    #dif_lat = n_lat -s_lat
+    #dif_lon = e_lon -w_lon
+    #m= dif_lat/dif_lon
+    #t = s_lat-m*s_lon
+    ####
+    lat=lat[(lat <= n_lat )&(lat >= s_lat)]
+    lon=lon[(lon <= e_lon)&(lon >= w_lon)]
+    
+    #idx_subsample=random.sample(sorted(common_idx.to_numpy()),8000)
+lon=lon[(lon <= e_lon)]
 common_idx=lon.index.intersection(lat.index)
-#idx_subsample=random.sample(sorted(common_idx.to_numpy()),8000)
-
 idx_list=common_idx.to_list()
-#Reducing data size by factor 100
-common_idx=idx_list[0::100]
+#Reducing data size by factor 1000
+common_idx=idx_list[0::division_factor]
 #%% If random sample is wished
 
 '''
@@ -184,14 +191,6 @@ dt_time = hyd.time.values
 unix_time = dt_time.astype('datetime64[s]').astype('int')
 
 #calculation of unix time for serveral time steps
-
-#dt_time = hyd.time.values
-#unix_time = np.array([
-#    dt_time[i].astype('datetime64[s]').astype('int') 
-#    for i in range(len(dt_time))])
-
-#Auswahl von Profilen um Faktor 10 kleiner #TODO überlegen wieviele Slices tatsächlich wählen
-
 n_spatial = SAMPLESIZE
 time = np.zeros([n_spatial*t_periods])
 for i in range(t_periods):
@@ -255,18 +254,6 @@ def flatten_1D_array_manually(ds):
     return np.concatenate((t_periods*[arr]))
     
 
-def flatten_2D_array_manually_old(ds):
-    A = ds.values
-    arr=np.fliplr(np.transpose(A)) #das muss ich umdrehem #
-    
-    #arr = np.zeros([80,56])
-    #arr[0:80,:] = ds.isel(time=0).values[:,:]
-    #arr[100:200,:] = ds.isel(time=1).values[:,:]
-    #arr[200:300,:] = ds.isel(time=2).values[:,:]
-    #arr[300:400,:] = ds.isel(time=3).values[:,:]
-    #arr[400:500,:] = ds.isel(time=4).values[:,:]
-    #arr[500:600,:] = ds.isel(time=5).values[:,:]
-    return arr
 
 def flatten_2D_array_manually_old2(ds, dim="height"):
     #arr=np.fliplr(np.transpose(ds.values[:,:])) #das muss ich umdrehem
@@ -307,36 +294,33 @@ def flipheight(ds,dim="height"):
     arr = np.zeros([SAMPLESIZE,56])
     h=np.arange(35.,91.,1)
     if dim=="height":
+        #arr=np.stack(([ds.sel(height=h)for h in h_levels[::-1] ]),axis=1)
         for i in range(len(h)):
             A=ds.sel(height=h[i]).values  #or ds.isel(height=i).values
             arr[:,len(h)-i-1] = A#np.transpose(A)
+    if dim =="height_2":
+        for i in range(len(h)):
+            A=ds.sel(height_2=h[i]).values  #or ds.isel(height=i).values
+            arr[:,len(h)-i-1] = A
+        #arr=np.stack(([ds.sel(height_2=h)for h in h_levels[::-1] ]),axis=1)
     return arr
 
-def flatten_2D_array_manually_test(ds, dim="height"):      
-    return np.concatenate(([flipheight(ds.sel(time=t),dim)for t in t_steps ]),axis=0)
+def flatten_2D_array_manually_other_option(ds, dim="height"):    
+    if  dim =="height_2":
+        return np.concatenate((t_periods*[flipheight(ds,dim)]))
+    else:
+        return np.concatenate(([flipheight(ds.sel(time=t),dim)for t in t_steps ]),axis=0)
 
 
-def flatten_2D_array_manually_height(ds):
-    #arr=np.fliplr(np.transpose(ds.values[:,:])) #das muss ich umdrehem
-    #ds =hyd.sel(ncells=common_idx).qv 
-    arr =  np.zeros([SAMPLESIZE,56])
-    h=np.arange(35.,91.,1)
-    c=0
-    for i in range(len(h)):
-        A=ds.sel(height_2=h[i]).values  #or ds.isel(height=i).values
-        arr[:,len(h)-i-1] = A
-    arr=np.concatenate((t_periods*[arr]))
-    return arr
 
-cic = flatten_2D_array_manually(hyd.qi)
 #ds =hyd.sel(ncells=common_idx).qv 
 #test1=flatten_2D_array_manually(ds)
 #test2=flatten_2D_array_manually_old(ds)
 #%%
 t_g = flatten_1D_array_manually_dimtime(twodim.ts)
 #sst = flatten_1D_array_manually(sst.SST) 
-u10 = flatten_1D_array_manually_dimtime(twodim.uas)[0]
-v10 = flatten_1D_array_manually_dimtime(twodim.vas)[0]
+u10 = flatten_1D_array_manually_dimtime(twodim.isel(height_2=0).uas)
+v10 = flatten_1D_array_manually_dimtime(twodim.isel(height_2=0).vas)
 
 #fr_seaice = flatten_1D_array_manually(ICON_input.fract_glace)
 
@@ -348,9 +332,7 @@ print("1D arrays are flattened.")
 
 #%%
 
-z = flatten_2D_array_manually_height(height.zg) #geometric_height_at_full_level_center
-print("zg has been flattened.")
-
+z = flatten_2D_array_manually(height.zg,"height_2") #geometric_height_at_full_level_center
 p = flatten_2D_array_manually(thermodyn.pfull)
 t = flatten_2D_array_manually(thermodyn.ta)
 #rh = flatten_2D_array_manually(thermodyn.rh) 
@@ -381,8 +363,7 @@ cgc[np.isnan(cgc)]=0.
 cwc[np.isnan(cwc)]=0.
 crc[np.isnan(crc)]=0.
 
-# create array of pamtra vertical output levels
-flight_levels = np.arange(12000,14500,500) #vorher 7000 als start
+
 
 # combine all hydrometeor arrays to one array (as needed by pamtra)
 hydro_cmpl = np.zeros([len(time),56,5])
