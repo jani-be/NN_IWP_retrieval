@@ -6,8 +6,9 @@ plus choosing of flight levels
 
 #%% Loading packages
 import numpy as np
-import xarray as xr
+
 import pandas as pd
+import xarray as xr
 import matplotlib.pyplot as plt
 import fsspec
 from matplotlib import cm
@@ -18,7 +19,7 @@ from scipy.interpolate import interpn
 DATE ="0829"
 
 fs = fsspec.filesystem("ipns")
-print(fs.glob("ipns://latest.orcestra-campaign.org/products/HALO/radiometer/*.zarr"))
+#print(fs.glob("ipns://latest.orcestra-campaign.org/products/HALO/radiometer/*.zarr"))
 file_flight_0829="ipns://latest.orcestra-campaign.org/products/HALO/radiometer/HALO-20240829a.zarr"
 file_altitude = 'ipns://latest.orcestra-campaign.org/products/HALO/position_attitude/HALO-20240829a.zarr'
 
@@ -27,6 +28,21 @@ ds_halo=xr.open_dataset(file_flight_0829,engine="zarr")
 ds_halo_altitude = xr.open_dataset(file_altitude,engine ="zarr")
 ds_halo_iwv=xr.open_dataset("ipns://latest.orcestra-campaign.org/products/HALO/iwv/HALO-20240829a.zarr",
                 engine="zarr")
+
+
+#%% Data Comparison condensate loads all campaign days with reruns (2D field)
+#Read in all 2D fields. Hereby, check for unusual names, eg high 3D rates
+# take out time steps erlier than 12:00h
+#plot histogram of condensate loads for all days together
+# Condensate loads of interest: IWV, IWP, PP
+# -> 3 plots
+# plot histogram of the 3 rerun days combined
+# -> 3 plots
+# merge upper 6 plots into 3 plots
+# check, if upper and lower ends of rerun days extent to same variability as all days combined
+# if not, think about how to choose which days to take extra in account
+# if yes, check if subsampled area (100th icon) has same variability
+
 
 
 #%% Halo Ice peak analysis
