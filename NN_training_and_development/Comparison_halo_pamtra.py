@@ -14,6 +14,7 @@ import fsspec
 from matplotlib import cm
 from matplotlib.colors import Normalize 
 from scipy.interpolate import interpn
+from functools import partial
 #%% Reading halo data
 
 DATE ="0829"
@@ -31,7 +32,29 @@ ds_halo_iwv=xr.open_dataset("ipns://latest.orcestra-campaign.org/products/HALO/i
 
 
 #%% Data Comparison condensate loads all campaign days with reruns (2D field)
-#Read in all 2D fields. Hereby, check for unusual names, eg high 3D rates
+#Read in all 2D fields.
+#How to read multiple files?
+DATE="0829"
+appendix = ""
+
+path_sim = "/work/mh0492/m301067/orcestra/icon-mpim/build-lamorcestra/experiments/"
+path = path_sim + f"orcestra_1250m_{DATE+appendix}/"
+twodim_file = path + f"orcestra_1250m_{DATE+appendix}_atm_2d_ml_DOM01_2024{DATE}T000000Z.nc"
+twodim_files  = path_sim + "orcestra_1250m_*[0-9]/" +"orcestra_1250m_*_atm_2d_ml_DOM01_2024*T000000Z.nc"
+
+
+
+def _preprocess(x, start_time="24h"):#, end_time="48h" ):
+  start=x.time[0].values+pd.Timedelta(start_time)
+  #stop=x.time[0].values +pd.Timedelta(end_time) #last time step
+  stop=x.time[-2].values #last time step
+  t_steps =xr.date_range(start,stop,freq="2h")
+  print(start)
+  return x.sel(time=t_steps)
+#How to determine time step 
+partial_func = partial(_preprocess,start_time="24h") #, end_time="48h")
+#ds= xr.open_dataset(twodim_file)
+ds_alldays= xr.open_mfdataset(twodim_files,preprocess=partial_func)
 # take out time steps erlier than 12:00h
 #plot histogram of condensate loads for all days together
 # Condensate loads of interest: IWV, IWP, PP
@@ -43,7 +66,9 @@ ds_halo_iwv=xr.open_dataset("ipns://latest.orcestra-campaign.org/products/HALO/i
 # if not, think about how to choose which days to take extra in account
 # if yes, check if subsampled area (100th icon) has same variability
 
-
+#print(fs.glob("ipns://latest.orcestra-campaign.org/products/HALO/iwv/*.zarr"))
+#%%
+#ds4 =ds.chunk(dict(time=-1))
 
 #%% Halo Ice peak analysis
 # which flights are particulary interesting? From all and the golden days
