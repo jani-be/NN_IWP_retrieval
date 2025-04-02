@@ -56,9 +56,10 @@ else:
 # reading files
 
 
-grid = xr.open_dataset(meshdir+meshname+".nc")
+
 height = xr.open_dataset(height_file)
-frac_land= xr.open_dataset(frac_land_file)
+frac_land= xr.open_dataset(frac_land_file, chunks={"cell": -1})
+frac_land=frac_land.drop_dims("nv")
 # %%%
 
 # Limiting simulation data from 24h - 48 h
@@ -83,30 +84,28 @@ if DATE == "0829":
 else:
     hyd = _preprocess(xr.open_dataset(hydrometeor_file, chunks={"ncells": -1}))
 
-
-
+frac_land=chp.remap(frac_land,input_core_dim="cell")
+frac_land=chp.coarse_for_pamtra(frac_land,res=0.25)
 #grid,frac_land = chp.read_grid_and_cell_data()
 def prep_ds(ds):
-    if "cell" in set(ds.dims): 
-        ds=chp.remap(ds,input_core_dim="cell")
-    else:
-        ds=chp.remap(ds)
+    ds=chp.remap(ds)
     ds=chp.cut_to_area(ds)
-    grid,frac_land = chp.read_grid_and_cell_data()
+    ds=chp.coarse_for_pamtra(ds,res=0.25)
     ds.where((frac_land.sea==1).compute(),drop=True) 
+    
     return ds
 
-twodim
-thermodyn
-hyd
+twodim=prep_ds(twodim)
+thermodyn=prep_ds(thermodyn)
+hyd = prep_ds(hyd.drop_vars('height_bnds'))
 
-grid
-height
-frac_land
+
+height # nur Höhe entnehmen. Kein remappen nötig
+frac_land # still needs mask and coarsing
 
 
 # only ocean data
-ds_sea=ds_remap.where((frac_land.sea==1).compute(),drop=True) 
+
 ########
 #%%
 #choose subset tp work with
