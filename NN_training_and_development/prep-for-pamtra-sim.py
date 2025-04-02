@@ -75,7 +75,7 @@ def _preprocess(x, start_time="24h"):#, end_time="48h" ):
 
 partial_func = partial(_preprocess,start_time="24h") #, end_time="48h")
 twodim= _preprocess(xr.open_dataset(twodim_file, chunks={"ncells": -1}))
-thermodyn =_preprocess(xr.open_dataset(twodim_file, chunks={"ncells": -1}))#xr.open_dataset(thermodyn_file)
+thermodyn =_preprocess(xr.open_dataset(thermodyn_file, chunks={"ncells": -1}))#xr.open_dataset(thermodyn_file)
 
 if DATE == "0829":
     hyd1=  _preprocess(xr.open_dataset(hydrometeor1_file, chunks={"ncells": -1}))
@@ -96,24 +96,64 @@ def prep_ds(ds):
     return ds
 
 twodim=prep_ds(twodim)
-thermodyn=prep_ds(thermodyn)
+thermodyn=prep_ds(thermodyn.drop_vars('height_bnds'))
 hyd = prep_ds(hyd.drop_vars('height_bnds'))
 
 
+
 height # nur Höhe entnehmen. Kein remappen nötig
-frac_land # still needs mask and coarsing
+frac_land # still needs mask a
 
 
-# only ocean data
+# TODO get time
 
-########
+
+variables2D_const = ["fract_land", 'lon', 'lat'] # 'topography_c' would be the ICON equivalent to the COSMO 'HSURF'
+variables3D = ["ts"]#,"pres_sfc"]
+variables4D_10m = ["uas","vas"]
+variables4D = ["temp","pres","qv","qc","qi","qr","qs","qg","qh","qnc","qni","qnr","qns","qng","qnh"]
+
+
 #%%
-#choose subset tp work with
-ds_small=chp.coarse_for_pamtra(ds_sea,res=0.25)
 
 
-#processing of all sorts
+pamData = dict()
 
+# time and location
+pamData["timestamp"] = time[:]
+pamData["lat"] =  lats[:]
+pamData["lon"] =  lons[:]
 
+# surface propertiesprin
+pamData["groundtemp"] = t_g[:]
+pamData["sfc_slf"] = fr_land[:]
+pamData["sfc_sif"] = np.zeros(pamData['groundtemp'].shape)[:] #Annahme, dass sea ice 0 ist
+pamData["wind10u"] = u10[:]
+pamData["wind10v"] = v10[:]
+pamData["sfc_type"] = np.around(pamData['sfc_slf'])[:]
+pamData["sfc_model"] = np.zeros(pamData['groundtemp'].shape)[:]
+pamData["sfc_refl"]  = np.chararray(pamData['groundtemp'].shape)[:]
+pamData["sfc_refl"][:] = 'S' # land  'F' # ocean 'L' lambertian, land
+#pamData["sfc_type"][(pamData['sfc_type'] == 0) & (pamData['sfc_sif'] > 0)] = 1 Nicht nötig, da Annahme, dass es kein sea ice gibt
 
-# save as nparray
+# vertical profiles
+#pamData["hgt"] = np.array([height,]*len(time))[:,:]
+#pamData["hgt"] = hyd.height #z[:,:]
+
+pamData["hgt"] = z[:,:]
+
+pamData["press"] = p[:,:]
+pamData["temp"] = t[:,:]
+pamData["relhum"] = rh[:,:]
+pamData["hydro_q"] = hydro_cmpl[:,:,:]
+
+pamData["obs_height"] = np.zeros([len(time),1,len(flight_levels)])
+pamData["obs_height"][:,:,:] = flight_levels
+#pamData["obs_height"] = np.full([len(time),1],12500.)[:,:]
+
+#testing dict
+print("pamData filled")
+#print(for key in pamData.keys(): pamData[key].shape)
+
+# Save
+np.save(f'/work/um0203/u301032/PAMTRA_output/PAMTRA-ICON_{DATE}_{output_name}.npy', pamData) 
