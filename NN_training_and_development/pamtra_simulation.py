@@ -1,90 +1,148 @@
 #%%
-
-
 import numpy as np
 import xarray as xr
 from netCDF4 import Dataset
 import random
-
-#from metpy.calc import relative_humidity_from_specific_humidity
-#from metpy.units import units
-
 import sys
 sys.path.append('/home/u/u301032/pamtra/pamtra/python/pyPamtra')
+
 import pyPamtra
 from pyPamtra import meteoSI
 
-
-
-
 #%%
+# Choose Parameters #TODO In ein großes Dictionairy?
+DATE= "0829" #"0927" #"0824" #
+#NAME UNDER WHICH TO SAFE RUNS
+output_name = "all_area_v1"
+#Extend of Simulation area:
+s_lat = -2
+w_lon = -62
+e_lon= -16
+n_lat=22
+flight_levels =[11400.0,11900.0,12650.0,13000.0,13250.0,13600.0,13900.0,14450.0,13900.0,15000.0	]
+division_factor =1000 #1000 leads to ~ 6000 n_spatial
+try:
+    sys.argv
+except:
+    print("no DATE was given. Using now DATE",DATE)
+else:
+    DATE = (sys.argv[1])
+    print("pamtra simulation for DATE",DATE)    
+#%% reading file paths
 
-# file paths
-DATE= "0829"
+if DATE == "0829":
+    appendix = "-high3Drate"
+else:
+    appendix = "-rerun"
+
 path_sim = "/work/mh0492/m301067/orcestra/icon-mpim/build-lamorcestra/experiments/"
-path = path_sim + f"orcestra_1250m_{DATE}/"
-hydrometeor_file = path + f"orcestra_1250m_{DATE}_atm_3d_hydrometeors_DOM01_2024{DATE}T000000Z.nc"
-thermodyn_file = path + f"orcestra_1250m_{DATE}_atm_3d_thermodynamics_DOM01_2024{DATE}T000000Z.nc"
-path_3d = path_sim + "orcestra_1250m_0829-high3Drate/" 
-height_file = path_3d + "orcestra_1250m_0829-high3Drate_atm_vgrid_ml.nc"
-rain_file = path_3d + "orcestra_1250m_0829-high3Drate_atm_3d_hydrometeors2_DOM01_20240829T000000Z.nc"
+path = path_sim + f"orcestra_1250m_{DATE+appendix}/"
+height_file = path_sim + f"orcestra_1250m_0829-high3Drate/orcestra_1250m_0829-high3Drate_atm_vgrid_ml.nc"
+
 meshdir = "/work/mh0492/m301067/orcestra/auxiliary-files/grids/"
 meshname = "ORCESTRA_1250m_DOM01"
 frac_land_file= path + "bc_land_frac.nc"
-#SST_file = path + "bc_sst.nc"
-twodim_file = path + f"orcestra_1250m_{DATE}_atm_2d_ml_DOM01_2024{DATE}T000000Z.nc"
 
+thermodyn_file = path + f"orcestra_1250m_{DATE+appendix}_atm_3d_thermodynamics_DOM01_2024{DATE}T000000Z.nc"
+twodim_file = path + f"orcestra_1250m_{DATE+appendix}_atm_2d_ml_DOM01_2024{DATE}T000000Z.nc"
+
+if DATE == "0829":
+    hydrometeor1_file = path + f"orcestra_1250m_{DATE+appendix}_atm_3d_hydrometeors1_DOM01_2024{DATE}T000000Z.nc"
+    hydrometeor2_file = path + f"orcestra_1250m_{DATE+appendix}_atm_3d_hydrometeors2_DOM01_2024{DATE}T000000Z.nc"
+else:    
+    hydrometeor_file = path + f"orcestra_1250m_{DATE+appendix}_atm_3d_hydrometeors_DOM01_2024{DATE}T000000Z.nc"
+
+
+#%%
 # reading files
 grid = xr.open_dataset(meshdir+meshname+".nc")
-hyd = xr.open_dataset(hydrometeor_file)
+
 thermodyn =xr.open_dataset(thermodyn_file)
-rain = xr.open_dataset(rain_file)
 height = xr.open_dataset(height_file)
 frac_land= xr.open_dataset(frac_land_file)
 #sst = xr.open_dataset(SST_file) #TODO isel timestamp?? zeit falsch angegeben und nur 12 h schritte
 twodim = xr.open_dataset(twodim_file)
-
+if DATE == "0829":
+    hyd1=  xr.open_dataset(hydrometeor1_file)
+    hyd2=  xr.open_dataset(hydrometeor2_file)
+    hyd=    xr.merge([hyd1,hyd2])
+else:
+    hyd = xr.open_dataset(hydrometeor_file)
 #print(hyd,thermodyn)
 #print(grid)
+
+
 # %%%
+#timestamps for DATE == "0824"
 # selection of time stamps: 00,04,08,12,16,20, 24, 28, 32, 36 h
 # selection of time = 36:00h
-hyd=hyd.isel(time=3) #sonst 9
-thermodyn=thermodyn.isel(time=3) #sonst 9
-#sst =sst.isel(time=4)
-twodim = twodim.isel(time=72)
 
-rain = rain.isel(time=72) # 2024-08-29T12:00:00
+#Für Colocation : von 8 bis 20:00h
+day = DATE[2:5]
+month = DATE[0:2]
+if DATE == "0829":
+    t_periods = 4
+else:
+    t_periods = 5 #from 10
+t_steps =xr.date_range("2024-"+month+"-"+day+" 12:00:00",periods=t_periods,freq="4h")
 
-#thermodyn=thermodyn.isel(time=slice(5))
+hyd=hyd.sel(time=t_steps) 
+thermodyn=thermodyn.sel(time=t_steps) 
+twodim = twodim.sel(time=t_steps)
+
+"""
+#Für Colocation : von 8 bis 20:00h
+day = str(int(DATE[2:5])+1)
+month = DATE[0:2]
+t_periods = 7
+t_steps =xr.date_range("2024-"+month+"-"+day+" 08:00:00",periods=t_periods,freq="2h")
+
+hyd=hyd.sel(time=t_steps) #sonst 9
+thermodyn=thermodyn.sel(time=t_steps) #sonst 9
+twodim = twodim.sel(time=t_steps)
+
+#or:
+
+#timestamps for DATE == "0829"
+# selection of time stamps: 00,04,08,12,16,20, 24, 28, 32, 36 h
+# selection of time = 36:00h
+
+if DATE == "0829":
+    thermodyn=thermodyn.isel(time=72) 
+    twodim = twodim.isel(time=72)
+    hyd = hyd.isel(time=72) # 2024-08-29T12:00:00
+"""
 
 
-#%% Index, spatial
 
-lat = np.rad2deg(grid.clat.to_pandas())
+#%% Index, spatial, TODO: Auslagern? da auch von pamtra comparison genutzt
 
-lon=np.rad2deg(grid.clon.to_pandas())
+lat = np.rad2deg(grid.clat.to_pandas()[frac_land.sea.to_pandas()==1])
 
-#7.344833, -26.471667
-s_lat = 2.5
-s_lon = -27.378
-n_lon= -24.276
-n_lat=18.581
+lon=np.rad2deg(grid.clon.to_pandas()[frac_land.sea.to_pandas()==1])
 
-dif_lat = n_lat -s_lat
-dif_lon = n_lon -s_lon
-m= dif_lat/dif_lon
-t = s_lat-m*s_lon
-
-####
-lat=lat[(lat <= n_lat )&(lat >= s_lat)]
-lon=lon[(lon <= n_lon)&(lon >= s_lon)]
+try:    
+    n_lat
+    s_lat,
+    e_lon,
+    w_lon
+except:
+    print("no complete definiton of lon and lat area")    
+else:
+    #dif_lat = n_lat -s_lat
+    #dif_lon = e_lon -w_lon
+    #m= dif_lat/dif_lon
+    #t = s_lat-m*s_lon
+    ####
+    lat=lat[(lat <= n_lat )&(lat >= s_lat)]
+    lon=lon[(lon <= e_lon)&(lon >= w_lon)]
+    
+    #idx_subsample=random.sample(sorted(common_idx.to_numpy()),8000)
+lon=lon[(lon <= e_lon)]
 common_idx=lon.index.intersection(lat.index)
-#idx_subsample=random.sample(sorted(common_idx.to_numpy()),8000)
-
 idx_list=common_idx.to_list()
-#Reducing data size by factor 100
-common_idx=idx_list[0::100]
+#Reducing data size by factor 1000
+common_idx=idx_list[0::division_factor]
 #%% If random sample is wished
 
 '''
@@ -139,47 +197,16 @@ dt_time = hyd.time.values
 unix_time = dt_time.astype('datetime64[s]').astype('int')
 
 #calculation of unix time for serveral time steps
-
-#dt_time = hyd.time.values
-#unix_time = np.array([
-#    dt_time[i].astype('datetime64[s]').astype('int') 
-#    for i in range(len(dt_time))])
-
-#Auswahl von Profilen um Faktor 10 kleiner #TODO überlegen wieviele Slices tatsächlich wählen
-
 n_spatial = SAMPLESIZE
-time = np.zeros([n_spatial])
-time[0:n_spatial] = unix_time#unix_time[0]
-#time[100:200] = unix_time[1]
-#time[200:300] = unix_time[2]
-#time[300:400] = unix_time[3]
-#time[400:500] = unix_time[4]
-#time[500:600] = unix_time[5]
-
-
-"""
->>> common_idx
-Int64Index([1959543, 1959546, 1959547, 1959548, 1959549, 1959550, 1959551,
-            1959552, 1959553, 1959554, 1959555, 1963313, 1963314, 1963315,
-            1963316, 1963317, 1963318, 1963319, 1963320, 1963321, 1963322,
-            1963323, 1963324, 1963325, 1963326, 1967083, 1967084, 1967085,
-            1967086, 1967087, 1967088, 1967089, 1967090, 1967091, 1967092,
-            1967093, 1967094, 1967095, 1967096, 1970853, 1970854, 1970855,
-            1970856, 1970857, 1970858, 1970859, 1970860, 1970861, 1970862,
-            1970863, 1970864, 1970865, 1970866, 1974623, 1974624, 1974625,
-            1974626, 1974627, 1974628, 1974629, 1974630, 1974631, 1974632,
-            1974633, 1974634, 1974635, 1974636, 1978393, 1978394, 1978395,
-            1978396, 1978397, 1978398, 1978399, 1978400, 1978401, 1978402,
-            1978403, 1978404, 1978406],
-           dtype='int64', name='cell')
-"""
+time = np.zeros([n_spatial*t_periods])
+for i in range(t_periods):
+    time[i*n_spatial:(i+1)*n_spatial] = unix_time[i] #unix_time
 
 #%%
 hyd=hyd.drop_dims("bnds") 
 thermodyn=thermodyn.drop_dims("bnds")
 #sst = sst.drop_dims("nv")
 frac_land = frac_land.drop_dims("nv")
-rain = rain.drop_dims("bnds")
 
 
 #hyd=hyd.isel(ncells=common_idx)
@@ -187,7 +214,7 @@ hyd=hyd.sel(ncells=common_idx)
 thermodyn=thermodyn.sel(ncells=common_idx)
 
 # oder thermodyn=thermodyn.sel(ncells=common_idx)
-rain = rain.sel(ncells=common_idx)
+
 grid=grid.sel(cell=common_idx)
 height=height.sel(ncells=common_idx) 
 #sst=sst.isel(cell=common_idx)  # 
@@ -196,59 +223,21 @@ frac_land = frac_land.sel(cell = common_idx)
 
 height = height.sel(height_2 = range(35,91))
 
-# seamask beachtne
-
-# give me cells of lon lat values of ....
-#ICON_lons = np.array(ICON.clon.values[:])
-#lons[t,:] = np.rad2deg(ICON_lons[rndm_ocean_profiles])
-#lat = np.deg2rad(12)
-#lon = np.deg2rad(-56)
-#>>> grid.clon.values[6000]
-#-0.9612835272738588
-
-#grid_small = grid.sel(clat=slice(lat,lat+1),clon=slice(lon,lon+1))
-
-#clat_deg = np.rad2deg(grid.clat)
-#starting point for just now 12.492500, -56.095667
-#slicen und selecten von kleiner Untermenge
-#TODO all_ocean_profiles = np.where(frac_land.sea==1)[0].tolist()
-
-# choose a random subsample of these cell indices of SAMPLESIZE
-#rndm_ocean_profiles = random.sample(all_ocean_profiles,SAMPLESIZE)
-
-#TODO select / iselect   
-#hyd=hyd.sel(ncells=rndm_ocean_profiles)
-#thermodyn=thermodyn.sel(ncells=rndm_ocean_profiles)
-#grid=grid.sel(ncells=rndm_ocean_profiles)
 
 
 
+
+def flatten_1D_array_manually_dimtime(ds):
+    return np.concatenate(([(ds.sel(time=t))for t in t_steps ]),axis=0)
+    
 
 def flatten_1D_array_manually(ds):
-    arr=ds.values[:]
-    #arr = np.zeros([80])
-    #arr[0:80] = ds.isel(time=0).values[:]
-    #arr[100:200] = ds.isel(time=1).values[:]
-    #arr[200:300] = ds.isel(time=2).values[:]
-    #arr[300:400] = ds.isel(time=3).values[:]
-    #arr[400:500] = ds.isel(time=4).values[:]
-    #arr[500:600] = ds.isel(time=5).values[:]
-    return arr
-
-def flatten_2D_array_manually_old(ds):
-    A = ds.values
-    arr=np.fliplr(np.transpose(A)) #das muss ich umdrehem #
+    arr = ds.values
+    return np.concatenate((t_periods*[arr]))
     
-    #arr = np.zeros([80,56])
-    #arr[0:80,:] = ds.isel(time=0).values[:,:]
-    #arr[100:200,:] = ds.isel(time=1).values[:,:]
-    #arr[200:300,:] = ds.isel(time=2).values[:,:]
-    #arr[300:400,:] = ds.isel(time=3).values[:,:]
-    #arr[400:500,:] = ds.isel(time=4).values[:,:]
-    #arr[500:600,:] = ds.isel(time=5).values[:,:]
-    return arr
 
-def flatten_2D_array_manually(ds, dim="height"):
+
+def flatten_2D_array_manually_old2(ds, dim="height"):
     #arr=np.fliplr(np.transpose(ds.values[:,:])) #das muss ich umdrehem
     #ds =hyd.sel(ncells=common_idx).qv 
     arr = np.zeros([SAMPLESIZE,56])
@@ -265,25 +254,67 @@ def flatten_2D_array_manually(ds, dim="height"):
             #arr[:,i] = np.transpose(ds.sel(height=h[i]).to_numpy()) #other option 
     return arr
 
+def flatten_2D_array_manually(ds, dim="height"):
+    #arr=np.fliplr(np.transpose(ds.values[:,:])) #das muss ich umdrehem
+    #ds =hyd.sel(ncells=common_idx).qv 
+    arr = np.zeros([SAMPLESIZE*t_periods,56])
+    h=np.arange(35.,91.,1)
+    for t in range(t_periods):
+        if dim=="height":
+            for i in range(len(h)):
+                A=ds.sel(height=h[i],time=t_steps[t]).values  #or ds.isel(height=i).values
+                arr[SAMPLESIZE*t:SAMPLESIZE*(t+1),len(h)-i-1] = A#np.transpose(A)
+                #arr[:,i] = np.transpose(ds.sel(height=h[i]).to_numpy()) #other option
+        else:
+            for i in range(len(h)):
+                A=ds.sel(height_2=h[i]).values  #or ds.isel(height=i).values
+                arr[SAMPLESIZE*t:SAMPLESIZE*(t+1),len(h)-i-1] = A#np.transpose(A)
+                #arr[:,i] = np.transpose(ds.sel(height=h[i]).to_numpy()) #other option 
+    return arr
+
+def flipheight(ds,dim="height"):
+    arr = np.zeros([SAMPLESIZE,56])
+    h=np.arange(35.,91.,1)
+    if dim=="height":
+        #arr=np.stack(([ds.sel(height=h)for h in h_levels[::-1] ]),axis=1)
+        for i in range(len(h)):
+            A=ds.sel(height=h[i]).values  #or ds.isel(height=i).values
+            arr[:,len(h)-i-1] = A#np.transpose(A)
+    if dim =="height_2":
+        for i in range(len(h)):
+            A=ds.sel(height_2=h[i]).values  #or ds.isel(height=i).values
+            arr[:,len(h)-i-1] = A
+        #arr=np.stack(([ds.sel(height_2=h)for h in h_levels[::-1] ]),axis=1)
+    return arr
+
+def flatten_2D_array_manually_other_option(ds, dim="height"):    
+    if  dim =="height_2":
+        return np.concatenate((t_periods*[flipheight(ds,dim)]))
+    else:
+        return np.concatenate(([flipheight(ds.sel(time=t),dim)for t in t_steps ]),axis=0)
+
+
+
 #ds =hyd.sel(ncells=common_idx).qv 
 #test1=flatten_2D_array_manually(ds)
 #test2=flatten_2D_array_manually_old(ds)
 #%%
-t_g = flatten_1D_array_manually(twodim.ts)
+t_g = flatten_1D_array_manually_dimtime(twodim.ts)
 #sst = flatten_1D_array_manually(sst.SST) 
-u10 = flatten_1D_array_manually(twodim.uas)[0]
-v10 = flatten_1D_array_manually(twodim.vas)[0]
-fr_land = flatten_1D_array_manually(frac_land.land)
+u10 = flatten_1D_array_manually_dimtime(twodim.isel(height_2=0).uas)
+v10 = flatten_1D_array_manually_dimtime(twodim.isel(height_2=0).vas)
+
 #fr_seaice = flatten_1D_array_manually(ICON_input.fract_glace)
+
+fr_land = flatten_1D_array_manually(frac_land.land)
+
 print("1D arrays are flattened.")
 
 
 
 #%%
 
-z = flatten_2D_array_manually(height.zg,"height_2") 
-print("zg has been flattened.")
-
+z = flatten_2D_array_manually(height.zg,"height_2") #geometric_height_at_full_level_center
 p = flatten_2D_array_manually(thermodyn.pfull)
 t = flatten_2D_array_manually(thermodyn.ta)
 #rh = flatten_2D_array_manually(thermodyn.rh) 
@@ -291,10 +322,10 @@ cic = flatten_2D_array_manually(hyd.qi) #hier schon ändern? Vergleich einlesen 
 csc = flatten_2D_array_manually(hyd.qs) #
 cgc = flatten_2D_array_manually(hyd.qg) #
 cwc = flatten_2D_array_manually(hyd.qc) #
-crc = flatten_2D_array_manually(rain.qr) #
+crc = flatten_2D_array_manually(hyd.qr) #
 q = flatten_2D_array_manually(hyd.qv)
 
-rh=meteoSI.q2rh(q,t,p)
+rh=100*meteoSI.q2rh(q,t,p)
 #rh = 26.3 * p * q * 1/(np.exp((17.67*(t-273.16))/(t-29.65)))/10000
 print("2D arrays are flattened.")
 #%%
@@ -314,8 +345,7 @@ cgc[np.isnan(cgc)]=0.
 cwc[np.isnan(cwc)]=0.
 crc[np.isnan(crc)]=0.
 
-# create array of pamtra vertical output levels
-flight_levels = np.arange(12000,14500,500) #vorher 7000 als start
+
 
 # combine all hydrometeor arrays to one array (as needed by pamtra)
 hydro_cmpl = np.zeros([len(time),56,5])
@@ -371,7 +401,7 @@ print("pamData filled")
 #print(for key in pamData.keys(): pamData[key].shape)
 
 # Save
-#np.save('/home/u/u301032/orcestra/NN_IWP_retrieval/NN_training_and_development/pamData_test_factor_10.npy', pamData) 
+np.save(f'/work/um0203/u301032/PAMTRA_output/PAMTRA-ICON_{DATE}_{output_name}.npy', pamData) 
 
 
 # Load
@@ -462,13 +492,13 @@ pam.runParallelPamtra(
 
 # save pamtra simulation results to netcdf file
 pam.writeResultsToNetCDF(
-    f'/work/um0203/u301032/PAMTRA_output/PAMTRA-ICON_{DATE}_test_factor_100.nc',
+    f'/work/um0203/u301032/PAMTRA_output/PAMTRA-ICON_{DATE}_{output_name}.nc',
     xarrayCompatibleOutput=True)
 #/work/um0203/u301238/PAMTRA/PAMTRA_NN_training_data/PAMTRA-ICON_{DATE}_4000rndm-profiles_all_hamp_freqs_v4.nc
 # save integrated values of hydrometeors and water vapor to numpy array
 bulk_values = np.concatenate((np.squeeze(pam.p['hydro_wp']),pam.p['iwv']),axis=1).shape
 #np.save(f'/work/um0203/u301238/PAMTRA/PAMTRA_NN_training_data/PAMTRA-ICON_{DATE}_4000rndm-profiles_bulk_values_v5',bulk_values)
-np.save(f'/work/um0203/u301032/PAMTRA_output/PAMTRA-ICON_{DATE}_test_factor_100_bulk_values_v5',bulk_values)
+np.save(f'/work/um0203/u301032/PAMTRA_output/PAMTRA-ICON_{DATE}_{output_name}_bulk_values_v5',bulk_values)
 
 print("")
 print("*** PAMTRA simulation finished and netcdf files saved ***")

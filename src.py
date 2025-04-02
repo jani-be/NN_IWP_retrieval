@@ -5,55 +5,125 @@ import pandas as pd
 import scipy.stats
 import matplotlib.pyplot as plt
 #from progressbar import ProgressBar
-#from tensorflow import keras
+from tensorflow import keras
 from netCDF4 import Dataset
 import datetime
-#from glob import glob
+from glob import glob
 import xarray as xr
-#from math import radians, cos, sin, asin, sqrt, atan2
+from math import radians, cos, sin, asin, sqrt, atan2
 
 
-def normed_log10_pdf_v0(var,bin_nr=10,bin_start=-1,bin_end=4):
+def get_HAMP_freqs_of(select='all_2side'):
     """
-    Function to calculate relative frequencies of occurence (pdf)
-    for a specified variable in logarthmic space, for specified 
-    range and bins.
+    Function to return frequenices of specified HAMP channel(s).
     """
+  
+    HAMP_freqs = {'K_band':[22.24,23.04,23.84,25.44,26.24,27.84,31.40],
+                  'V_band':[50.30,51.76,52.8,53.75,54.94,56.66,58.00],
+                  'W_band':[90.00],
+                  'F_band_1side':[118.75+1.4,118.75+2.3,118.75+4.2,118.75+8.5],
+                  'F_band_2side':[118.75-8.5,118.75-4.2,118.75-2.3,118.75-1.4,
+                                  118.75+1.4,118.75+2.3,118.75+4.2,118.75+8.5],
+                  'G_band_1side':[183.31+0.6,183.31+1.5,183.31+2.5,183.31+3.5,183.31+5.0,183.31+7.5,183.31+12.5],
+                  'G_band_2side':[183.31-12.5,183.31-7.5,183.31-5.0,183.31-3.5,183.31-2.5,183.31-1.5,183.31-0.6,
+                                  183.31+0.6,183.31+1.5,183.31+2.5,183.31+3.5,183.31+5.0,183.31+7.5,183.31+12.5],
+                  'NN_freqs':[22.24,23.04,23.84,25.44,26.24,27.84,31.40,
+                              50.30,51.76,52.8,53.75,54.94,56.66,58.00,
+                              90.00,
+                              118.75+1.4,118.75+2.3,118.75+4.2,118.75+8.5,
+                              183.31+0.6,183.31+2.5,183.31+3.5,183.31+5.0,183.31+7.5],
+                 }
     
-    bins = np.linspace(start=bin_start, stop=bin_end, num=bin_nr)
     
-    # count zeros and exclude them from variable
-    n_zeros = len(var[var==0.])
-    var = var[var!=0.]
-    
-    n_absolute, bins = np.histogram(np.log10(var),bins=bins)
-    
-    n_total = np.sum(n_absolute)+n_zeros
-    
-    prop_zero = n_zeros/n_total
-    
-    n_normed = np.array([n_absolute[i]/n_total for i in range(len(n_absolute))])
-    n_normed[n_normed==0]=np.nan
-    
-    return n_normed, prop_zero, bins
+    if select == 'all_1side':
+        freqs = np.concatenate((
+            np.array(HAMP_freqs['K_band']),
+            np.array(HAMP_freqs['V_band']),
+            np.array(HAMP_freqs['W_band']),
+            np.array(HAMP_freqs['F_band_1side']),
+            np.array(HAMP_freqs['G_band_1side']),))
+            
+    elif select == 'all_2side':
+        freqs = np.concatenate((
+            np.array(HAMP_freqs['K_band']),
+            np.array(HAMP_freqs['V_band']),
+            np.array(HAMP_freqs['W_band']),
+            np.array(HAMP_freqs['F_band_2side']),
+            np.array(HAMP_freqs['G_band_2side']),))
+   
+    else:
+        freqs = HAMP_freqs[select]
+            
+    return np.array(freqs)
 
-def normed_log10_pdf(var,bin_nr=10,bin_start=-1,bin_end=4,density=True):
-    """
-    Function to calculate relative frequencies of occurence (pdf)
-    for a specified variable in logarthmic space, for specified 
-    range and bins.
-    """
+        
+def create_pamtra_TB_vector(pamtra_ds,outlevels):
+
+    # select "nadir looking" BTs
+    pamtra_ds = pamtra_ds.sel(angles=180,grid_y=0)
+    pamtra_ds = pamtra_ds.drop(['grid_y','angles'])
+    # average over v and h polarisation
+    pamtra_ds = pamtra_ds.mean(dim='passive_polarisation')
+    # get indices of specified altitudes
+    level_inds = [np.where(pamtra_ds.outlevels.values[0,:].squeeze() == level)[0][0] for level in outlevels]
+    # select pamtra dataset at specified altitudes
+    pamtra_ds = pamtra_ds.sel(outlevel=xr.DataArray(level_inds,dims=['outlevel']))
     
-    bins = np.linspace(start=bin_start, stop=bin_end, num=bin_nr)
+    # select arrays of BTs of K,V,W band
+    K_band = pamtra_ds.tb.sel(frequency=get_HAMP_freqs_of('K_band')).values[:,:,:]
+    V_band = pamtra_ds.tb.sel(frequency=get_HAMP_freqs_of('V_band')).values[:,:,:]
+    W_band = pamtra_ds.tb.sel(frequency=get_HAMP_freqs_of('W_band')).values[:,:].reshape(pamtra_ds.tb.values.shape[0],len(outlevels),1)
     
-    if density == True:
-        n, bins = np.histogram(np.log10(var), bins=bins, density=True)
-        n[n==0.]=np.nan
-    if density == False:
-        n, bins = np.histogram(np.log10(var), bins=bins, density=False)
+    # average over doubleside frequencies of F_band
+    TB_120_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([118.75-1.4, 118.75+1.4],dims='frequency')),axis=2)
+    TB_121_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([118.75-2.3, 118.75+2.3],dims='frequency')),axis=2)
+    TB_122_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([118.75-4.2, 118.75+4.2],dims='frequency')),axis=2)
+    TB_127_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([118.75-8.5, 118.75+8.5],dims='frequency')),axis=2)
+    # create array of BTs of F_band
+    F_band = np.empty([K_band.shape[0],len(outlevels),4])
+    F_band[:,:,0] = TB_120_mean
+    F_band[:,:,1] = TB_121_mean
+    F_band[:,:,2] = TB_122_mean
+    F_band[:,:,3] = TB_127_mean
+
+    # average over doubleside frequencies of G_band
+    TB_183_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([183.31-0.6, 183.31+0.6],dims='frequency')),axis=2)
+    TB_184_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([183.31-1.5, 183.31+1.5],dims='frequency')),axis=2)
+    TB_185_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([183.31-2.5, 183.31+2.5],dims='frequency')),axis=2)
+    TB_186_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([183.31-3.5, 183.31+3.5],dims='frequency')),axis=2)
+    TB_188_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([183.31-5.0, 183.31+5.0],dims='frequency')),axis=2)
+    TB_190_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([183.31-7.5, 183.31+7.5],dims='frequency')),axis=2)
+    TB_195_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([183.31-12.5, 183.31+12.5],dims='frequency')),axis=2)
+    # create array of BTs of G_band
+    G_band = np.empty([K_band.shape[0],len(outlevels),5])
+    G_band[:,:,0] = TB_183_mean
+    G_band[:,:,1] = TB_185_mean
+    G_band[:,:,2] = TB_186_mean
+    G_band[:,:,3] = TB_188_mean
+    G_band[:,:,4] = TB_190_mean
+    #G_band = replace_outliers_with_CHmean(G_band,lower_thrs=230)
+
+    TB_vector = np.concatenate((
+        K_band,
+        V_band,
+        W_band,
+        F_band,
+        G_band),
+        axis=2)
     
-    return n, bins
+    #print("\nCreated ",TB_vector.shape, " TB input vector")
+    return TB_vector
+
+
+
+def add_noise(clean_signal,sigma=0.75):
     
+    mu = 0
+    
+    noise = np.random.normal(mu, sigma, clean_signal.shape) 
+    noisy_signal = clean_signal + noise
+    
+    return noisy_signal
 
 def integrate_hydm(hym_c,p,T,RH,z,z_max=None,eq_distant=True,rho_moist=False,axis=2):
     """
@@ -139,6 +209,218 @@ def integrate_hydm(hym_c,p,T,RH,z,z_max=None,eq_distant=True,rho_moist=False,axi
     
     return np.array([iwp,swp,gwp,fwp]), np.array([cwp,rwp,lwp]), iwv
     
+
+def load_nn_training_data(altitude=12500):
+    
+    #print("Loading PAMTRA training data (TBs)...")
+    # create list of all pamtra simulations of retrieval database
+    # create list of all pamtra simulations of retrieval database
+    pamtra_files = sorted(glob('/work/um0203/u301238/PAMTRA/PAMTRA_NN_training_data/PAMTRA-ICON_*_4000rndm-profiles_all_hamp_freqs_v3.nc'))
+
+    # open them as one concatenated multifile dataset
+    pamtra = xr.open_mfdataset(
+        pamtra_files,
+        combine='nested',
+        concat_dim='grid_x')
+
+    # create a (profile,frequency) TB input vector out of the PAMTRA simulated TBs 
+    # by averaging over all doubleside frequencies
+    TB_input_vector = create_pamtra_TB_vector(pamtra,outlevels=[altitude])
+    TB_input_vector = TB_input_vector[:,0,:]
+
+    # Add random noise to the simulated TBs
+    for channel in range(TB_input_vector.shape[1]):
+        if (channel >= 0) & (channel <= 6): # K-Band
+            TB_input_vector[:,channel] = add_noise(TB_input_vector[:,channel],sigma=0.1)
+        if (channel >= 7) & (channel <= 13): # V-Band
+            TB_input_vector[:,channel] = add_noise(TB_input_vector[:,channel],sigma=0.2)
+        if channel == 14: # W-Band
+            TB_input_vector[:,channel] = add_noise(TB_input_vector[:,channel],sigma=0.25)
+        if (channel >= 15) & (channel <= 18): # F-Band
+            TB_input_vector[:,channel] = add_noise(TB_input_vector[:,channel],sigma=0.6)
+        if (channel >= 19) & (channel <= 23): # G-Band
+            TB_input_vector[:,channel] = add_noise(TB_input_vector[:,channel],sigma=0.6)
+
+    # Load in numpy arrays containing ICON hydrometeor contents of PAMTRA simulations       
+    ICON_array_list = sorted(glob('/home/u/u301238/master_thesis/ICON/ICON_NN_training_data/ICON_NWP_HALOAC3-domain_*_4000rndm-profiles_profiles.npy'))
+
+    ICON_arrays = np.load(ICON_array_list[0])
+    for i in range(1,len(ICON_array_list)):
+        ICON_arrays = np.concatenate((ICON_arrays,np.load(ICON_array_list[i])),axis=0)
+
+    # calculate hydrometeor integrals
+    frozen_water, liquid_water, IWV = integrate_hydm(
+        hym_c = ICON_arrays[:,:,4:]*1000,
+        p = ICON_arrays[:,:,1],
+        T = ICON_arrays[:,:,2],
+        RH = ICON_arrays[:,:,3]/100,
+        z = ICON_arrays[:,:,0],
+        z_max = None,
+        eq_distant = False,
+        rho_moist=True,
+        axis=1)
+
+    return TB_input_vector, frozen_water, liquid_water, IWV
+
+def standardize_nn_training_data(TBs_train):
+        
+    TBs_centered = np.zeros(TBs_train.shape)
+    mu_train = np.zeros(TBs_train.shape[1])
+    sigma_train = np.zeros(TBs_train.shape[1])
+    for channel in range(TBs_train.shape[1]):
+
+        mu_train[channel] = np.nanmean(TBs_train[:,channel])
+        sigma_train[channel] = np.nanstd(TBs_train[:,channel])   
+
+        TBs_centered[:,channel] = (TBs_train[:,channel] - mu_train[channel])/sigma_train[channel]
+        
+    return TBs_centered, mu_train, sigma_train
+
+def standardize_nn_input_data_v1(TBs, nn_level=12500,version=1):
+    """
+    Center / Standardize a given array for its second axis with mean 0 and std of 1.
+    """
+    
+    TBs = np.asarray(TBs)
+    # if single TB observation provided extend dims to 2
+    if len(TBs.shape) == 1:
+        TBs = TBs[np.newaxis,:]
+    
+    # if given array of TBs represents TBs not part of the training database
+    # standardize them with respect to the mean and std of the training database TBs
+    
+        
+    TBs_train = xr.open_dataset(f'/home/u/u301238/master_thesis/nn/dnn_model_iwp_all_levels_v2/train_test_data/train_test_data_nn_24-32-1_reg_{nn_level}m_v{version}.nc').tb_train.values
+    
+    if TBs.shape[1] != TBs_train.shape[1]:
+        print("Given TB array has to have same frequencies as provided in the respective training database of the NN.")
+        return 
+        
+    TBs_centered = np.zeros(TBs.shape)
+    for channel in range(TBs.shape[1]):
+
+        mu_train = np.nanmean(TBs_train[:,channel])
+        sigma_train = np.nanstd(TBs_train[:,channel])   
+
+        TBs_centered[:,channel] = (TBs[:,channel] - mu_train)/sigma_train
+            
+    return TBs_centered
+
+def standardize_nn_input_data_v2(TBs, mu, sigma):
+    
+    TBs = np.asarray(TBs)
+    # if single TB observation provided extend dims to 2
+    if len(TBs.shape) == 1:
+        TBs = TBs[np.newaxis,:]
+    
+    TBs_centered = np.zeros(TBs.shape)
+    for channel in range(TBs.shape[1]):
+
+        TBs_centered[:,channel] = (TBs[:,channel] - mu[channel])/sigma[channel]
+    
+    return TBs_centered
+    
+def split_nn_training_data(TBs,IWP,LWP=None,IWV=None,split_ratio=0.75):
+    
+    # create a random choice of profile indices of the training dataset
+    # (as profiles are sorted by time otherwise, splitting wouldn't make sense then)
+    rndm_choice = np.random.permutation(len(IWP))
+
+    # get split index at which data hast to be splitted to fullfill the specified split_ratio
+    split_ind = int(split_ratio*len(IWP))
+
+    # X
+    # reorder X-vectors (atm. condition) according to random choice of profile indices
+    IWP_rndm_srt = IWP[rndm_choice]
+    # split into train and test data
+    IWP_train = IWP_rndm_srt[0:split_ind]
+    IWP_test = IWP_rndm_srt[split_ind:]
+    
+    if LWP is not None:
+        LWP_rndm_srt = LWP[rndm_choice]
+        # split into train and test data
+        LWP_train = LWP_rndm_srt[0:split_ind]
+        LWP_test = LWP_rndm_srt[split_ind:]
+        
+    if IWV is not None:
+        IWV_rndm_srt = IWV[rndm_choice]
+        # split into train and test data
+        IWV_train = IWV_rndm_srt[0:split_ind]
+        IWV_test = IWV_rndm_srt[split_ind:]
+
+    # Y
+    # reorder Y-vector (TBs) according to random choice of profile indices
+    TBs_rndm_srt = TBs[rndm_choice,:]
+    # split into train and test data
+    TBs_train = TBs_rndm_srt[0:split_ind,:]
+    TBs_test = TBs_rndm_srt[split_ind:,:]
+
+    return TBs_train, TBs_test, IWP_train, IWP_test, LWP_train, LWP_test, IWV_train, IWV_test
+
+def clip_nn_output(nn_prediction,truth=None):
+    
+    negative_predictions = np.round((len(nn_prediction[nn_prediction<0.])/len(nn_prediction))*100,2)
+    print(f"Negative predictions: {negative_predictions} %")
+
+    # clip nn output / predictions (= set negative values to zero)
+    nn_prediction_cliped = nn_prediction.copy()
+    nn_prediction_cliped[nn_prediction_cliped<0.]=0.
+    
+    if truth is not None:
+        # calculate bias before and after cliping
+        bias_before = np.mean(nn_prediction) - np.mean(truth)
+        bias_after = np.mean(nn_prediction_cliped) - np.mean(truth)
+
+        print("Bias before cliping: ",np.round(bias_before,2))
+        print("Bias after cliping: ",np.round(bias_after,2))
+
+    return nn_prediction_cliped
+
+
+
+
+def normed_log10_pdf_v0(var,bin_nr=10,bin_start=-1,bin_end=4):
+    """
+    Function to calculate relative frequencies of occurence (pdf)
+    for a specified variable in logarthmic space, for specified 
+    range and bins.
+    """
+    
+    bins = np.linspace(start=bin_start, stop=bin_end, num=bin_nr)
+    
+    # count zeros and exclude them from variable
+    n_zeros = len(var[var==0.])
+    var = var[var!=0.]
+    
+    n_absolute, bins = np.histogram(np.log10(var),bins=bins)
+    
+    n_total = np.sum(n_absolute)+n_zeros
+    
+    prop_zero = n_zeros/n_total
+    
+    n_normed = np.array([n_absolute[i]/n_total for i in range(len(n_absolute))])
+    n_normed[n_normed==0]=np.nan
+    
+    return n_normed, prop_zero, bins
+
+def normed_log10_pdf(var,bin_nr=10,bin_start=-1,bin_end=4,density=True):
+    """
+    Function to calculate relative frequencies of occurence (pdf)
+    for a specified variable in logarthmic space, for specified 
+    range and bins.
+    """
+    
+    bins = np.linspace(start=bin_start, stop=bin_end, num=bin_nr)
+    
+    if density == True:
+        n, bins = np.histogram(np.log10(var), bins=bins, density=True)
+        n[n==0.]=np.nan
+    if density == False:
+        n, bins = np.histogram(np.log10(var), bins=bins, density=False)
+    
+    return n, bins
+    
+'''
 
 def correct_radardata(ds,FLIGHT_NR):
     """
@@ -313,49 +595,6 @@ def unix_to_dt64_timestamps(unix_timestamps):
          for t in range(len(unix_timestamps))]).astype(np.datetime64)
     
     return dt64_timestamps
-
-def get_HAMP_freqs_of(select='all_2side'):
-    """
-    Function to return frequenices of specified HAMP channel(s).
-    """
-  
-    HAMP_freqs = {'K_band':[22.24,23.04,23.84,25.44,26.24,27.84,31.40],
-                  'V_band':[50.30,51.76,52.8,53.75,54.94,56.66,58.00],
-                  'W_band':[90.00],
-                  'F_band_1side':[118.75+1.4,118.75+2.3,118.75+4.2,118.75+8.5],
-                  'F_band_2side':[118.75-8.5,118.75-4.2,118.75-2.3,118.75-1.4,
-                                  118.75+1.4,118.75+2.3,118.75+4.2,118.75+8.5],
-                  'G_band_1side':[183.31+0.6,183.31+1.5,183.31+2.5,183.31+3.5,183.31+5.0,183.31+7.5,183.31+12.5],
-                  'G_band_2side':[183.31-12.5,183.31-7.5,183.31-5.0,183.31-3.5,183.31-2.5,183.31-1.5,183.31-0.6,
-                                  183.31+0.6,183.31+1.5,183.31+2.5,183.31+3.5,183.31+5.0,183.31+7.5,183.31+12.5],
-                  'NN_freqs':[22.24,23.04,23.84,25.44,26.24,27.84,31.40,
-                              50.30,51.76,52.8,53.75,54.94,56.66,58.00,
-                              90.00,
-                              118.75+1.4,118.75+2.3,118.75+4.2,118.75+8.5,
-                              183.31+0.6,183.31+2.5,183.31+3.5,183.31+5.0,183.31+7.5],
-                 }
-    
-    
-    if select == 'all_1side':
-        freqs = np.concatenate((
-            np.array(HAMP_freqs['K_band']),
-            np.array(HAMP_freqs['V_band']),
-            np.array(HAMP_freqs['W_band']),
-            np.array(HAMP_freqs['F_band_1side']),
-            np.array(HAMP_freqs['G_band_1side']),))
-            
-    elif select == 'all_2side':
-        freqs = np.concatenate((
-            np.array(HAMP_freqs['K_band']),
-            np.array(HAMP_freqs['V_band']),
-            np.array(HAMP_freqs['W_band']),
-            np.array(HAMP_freqs['F_band_2side']),
-            np.array(HAMP_freqs['G_band_2side']),))
-   
-    else:
-        freqs = HAMP_freqs[select]
-            
-    return np.array(freqs)
 
 def hamp_offset_correction(TBs,date):
     
@@ -557,73 +796,6 @@ def replace_outliers_with_CHmean(TB_array,lower_thrs):
     
     return TB_array
 
-def standardize_nn_training_data(TBs_train):
-        
-    TBs_centered = np.zeros(TBs_train.shape)
-    mu_train = np.zeros(TBs_train.shape[1])
-    sigma_train = np.zeros(TBs_train.shape[1])
-    for channel in range(TBs_train.shape[1]):
-
-        mu_train[channel] = np.nanmean(TBs_train[:,channel])
-        sigma_train[channel] = np.nanstd(TBs_train[:,channel])   
-
-        TBs_centered[:,channel] = (TBs_train[:,channel] - mu_train[channel])/sigma_train[channel]
-        
-    return TBs_centered, mu_train, sigma_train
-
-def standardize_nn_input_data_v1(TBs, nn_level=12500,version=1):
-    """
-    Center / Standardize a given array for its second axis with mean 0 and std of 1.
-    """
-    
-    TBs = np.asarray(TBs)
-    # if single TB observation provided extend dims to 2
-    if len(TBs.shape) == 1:
-        TBs = TBs[np.newaxis,:]
-    
-    # if given array of TBs represents TBs not part of the training database
-    # standardize them with respect to the mean and std of the training database TBs
-    
-        
-    TBs_train = xr.open_dataset(f'/home/u/u301238/master_thesis/nn/dnn_model_iwp_all_levels_v2/train_test_data/train_test_data_nn_24-32-1_reg_{nn_level}m_v{version}.nc').tb_train.values
-    
-    if TBs.shape[1] != TBs_train.shape[1]:
-        print("Given TB array has to have same frequencies as provided in the respective training database of the NN.")
-        return 
-        
-    TBs_centered = np.zeros(TBs.shape)
-    for channel in range(TBs.shape[1]):
-
-        mu_train = np.nanmean(TBs_train[:,channel])
-        sigma_train = np.nanstd(TBs_train[:,channel])   
-
-        TBs_centered[:,channel] = (TBs[:,channel] - mu_train)/sigma_train
-            
-    return TBs_centered
-
-def standardize_nn_input_data_v2(TBs, mu, sigma):
-    
-    TBs = np.asarray(TBs)
-    # if single TB observation provided extend dims to 2
-    if len(TBs.shape) == 1:
-        TBs = TBs[np.newaxis,:]
-    
-    TBs_centered = np.zeros(TBs.shape)
-    for channel in range(TBs.shape[1]):
-
-        TBs_centered[:,channel] = (TBs[:,channel] - mu[channel])/sigma[channel]
-    
-    return TBs_centered
-    
-
-def add_noise(clean_signal,sigma=0.75):
-    
-    mu = 0
-    
-    noise = np.random.normal(mu, sigma, clean_signal.shape) 
-    noisy_signal = clean_signal + noise
-    
-    return noisy_signal
 
 def get_RF_date_of(RF):
     """
@@ -788,171 +960,7 @@ def plot_hist_of_input(input_vector):
         axs[channel].grid(alpha=0.5)
         axs[channel].hist(input_vector[:,channel],ec='black',bins=bins)
         axs[channel].axvline(np.nanmean(input_vector[:,channel]),color='black')
-        
-def create_pamtra_TB_vector(pamtra_ds,outlevels):
 
-    # select "nadir looking" BTs
-    pamtra_ds = pamtra_ds.sel(angles=180,grid_y=0)
-    pamtra_ds = pamtra_ds.drop(['grid_y','angles'])
-    # average over v and h polarisation
-    pamtra_ds = pamtra_ds.mean(dim='passive_polarisation')
-    # get indices of specified altitudes
-    level_inds = [np.where(pamtra_ds.outlevels.values[0,:].squeeze() == level)[0][0] for level in outlevels]
-    # select pamtra dataset at specified altitudes
-    pamtra_ds = pamtra_ds.sel(outlevel=xr.DataArray(level_inds,dims=['outlevel']))
-    
-    # select arrays of BTs of K,V,W band
-    K_band = pamtra_ds.tb.sel(frequency=get_HAMP_freqs_of('K_band')).values[:,:,:]
-    V_band = pamtra_ds.tb.sel(frequency=get_HAMP_freqs_of('V_band')).values[:,:,:]
-    W_band = pamtra_ds.tb.sel(frequency=get_HAMP_freqs_of('W_band')).values[:,:].reshape(pamtra_ds.tb.values.shape[0],len(outlevels),1)
-    
-    # average over doubleside frequencies of F_band
-    TB_120_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([118.75-1.4, 118.75+1.4],dims='frequency')),axis=2)
-    TB_121_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([118.75-2.3, 118.75+2.3],dims='frequency')),axis=2)
-    TB_122_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([118.75-4.2, 118.75+4.2],dims='frequency')),axis=2)
-    TB_127_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([118.75-8.5, 118.75+8.5],dims='frequency')),axis=2)
-    # create array of BTs of F_band
-    F_band = np.empty([K_band.shape[0],len(outlevels),4])
-    F_band[:,:,0] = TB_120_mean
-    F_band[:,:,1] = TB_121_mean
-    F_band[:,:,2] = TB_122_mean
-    F_band[:,:,3] = TB_127_mean
-
-    # average over doubleside frequencies of G_band
-    TB_183_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([183.31-0.6, 183.31+0.6],dims='frequency')),axis=2)
-    TB_184_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([183.31-1.5, 183.31+1.5],dims='frequency')),axis=2)
-    TB_185_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([183.31-2.5, 183.31+2.5],dims='frequency')),axis=2)
-    TB_186_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([183.31-3.5, 183.31+3.5],dims='frequency')),axis=2)
-    TB_188_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([183.31-5.0, 183.31+5.0],dims='frequency')),axis=2)
-    TB_190_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([183.31-7.5, 183.31+7.5],dims='frequency')),axis=2)
-    TB_195_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([183.31-12.5, 183.31+12.5],dims='frequency')),axis=2)
-    # create array of BTs of G_band
-    G_band = np.empty([K_band.shape[0],len(outlevels),5])
-    G_band[:,:,0] = TB_183_mean
-    G_band[:,:,1] = TB_185_mean
-    G_band[:,:,2] = TB_186_mean
-    G_band[:,:,3] = TB_188_mean
-    G_band[:,:,4] = TB_190_mean
-    #G_band = replace_outliers_with_CHmean(G_band,lower_thrs=230)
-
-    TB_vector = np.concatenate((
-        K_band,
-        V_band,
-        W_band,
-        F_band,
-        G_band),
-        axis=2)
-    
-    #print("\nCreated ",TB_vector.shape, " TB input vector")
-    return TB_vector
-
-def load_nn_training_data(altitude=12500):
-    
-    #print("Loading PAMTRA training data (TBs)...")
-    # create list of all pamtra simulations of retrieval database
-    # create list of all pamtra simulations of retrieval database
-    pamtra_files = sorted(glob('/work/um0203/u301238/PAMTRA/PAMTRA_NN_training_data/PAMTRA-ICON_*_4000rndm-profiles_all_hamp_freqs_v3.nc'))
-
-    # open them as one concatenated multifile dataset
-    pamtra = xr.open_mfdataset(
-        pamtra_files,
-        combine='nested',
-        concat_dim='grid_x')
-
-    # create a (profile,frequency) TB input vector out of the PAMTRA simulated TBs 
-    # by averaging over all doubleside frequencies
-    TB_input_vector = create_pamtra_TB_vector(pamtra,outlevels=[altitude])
-    TB_input_vector = TB_input_vector[:,0,:]
-
-    # Add random noise to the simulated TBs
-    for channel in range(TB_input_vector.shape[1]):
-        if (channel >= 0) & (channel <= 6): # K-Band
-            TB_input_vector[:,channel] = add_noise(TB_input_vector[:,channel],sigma=0.1)
-        if (channel >= 7) & (channel <= 13): # V-Band
-            TB_input_vector[:,channel] = add_noise(TB_input_vector[:,channel],sigma=0.2)
-        if channel == 14: # W-Band
-            TB_input_vector[:,channel] = add_noise(TB_input_vector[:,channel],sigma=0.25)
-        if (channel >= 15) & (channel <= 18): # F-Band
-            TB_input_vector[:,channel] = add_noise(TB_input_vector[:,channel],sigma=0.6)
-        if (channel >= 19) & (channel <= 23): # G-Band
-            TB_input_vector[:,channel] = add_noise(TB_input_vector[:,channel],sigma=0.6)
-
-    # Load in numpy arrays containing ICON hydrometeor contents of PAMTRA simulations       
-    ICON_array_list = sorted(glob('/home/u/u301238/master_thesis/ICON/ICON_NN_training_data/ICON_NWP_HALOAC3-domain_*_4000rndm-profiles_profiles.npy'))
-
-    ICON_arrays = np.load(ICON_array_list[0])
-    for i in range(1,len(ICON_array_list)):
-        ICON_arrays = np.concatenate((ICON_arrays,np.load(ICON_array_list[i])),axis=0)
-
-    # calculate hydrometeor integrals
-    frozen_water, liquid_water, IWV = integrate_hydm(
-        hym_c = ICON_arrays[:,:,4:]*1000,
-        p = ICON_arrays[:,:,1],
-        T = ICON_arrays[:,:,2],
-        RH = ICON_arrays[:,:,3]/100,
-        z = ICON_arrays[:,:,0],
-        z_max = None,
-        eq_distant = False,
-        rho_moist=True,
-        axis=1)
-
-    return TB_input_vector, frozen_water, liquid_water, IWV
-
-def split_nn_training_data(TBs,IWP,LWP=None,IWV=None,split_ratio=0.75):
-    
-    # create a random choice of profile indices of the training dataset
-    # (as profiles are sorted by time otherwise, splitting wouldn't make sense then)
-    rndm_choice = np.random.permutation(len(IWP))
-
-    # get split index at which data hast to be splitted to fullfill the specified split_ratio
-    split_ind = int(split_ratio*len(IWP))
-
-    # X
-    # reorder X-vectors (atm. condition) according to random choice of profile indices
-    IWP_rndm_srt = IWP[rndm_choice]
-    # split into train and test data
-    IWP_train = IWP_rndm_srt[0:split_ind]
-    IWP_test = IWP_rndm_srt[split_ind:]
-    
-    if LWP is not None:
-        LWP_rndm_srt = LWP[rndm_choice]
-        # split into train and test data
-        LWP_train = LWP_rndm_srt[0:split_ind]
-        LWP_test = LWP_rndm_srt[split_ind:]
-        
-    if IWV is not None:
-        IWV_rndm_srt = IWV[rndm_choice]
-        # split into train and test data
-        IWV_train = IWV_rndm_srt[0:split_ind]
-        IWV_test = IWV_rndm_srt[split_ind:]
-
-    # Y
-    # reorder Y-vector (TBs) according to random choice of profile indices
-    TBs_rndm_srt = TBs[rndm_choice,:]
-    # split into train and test data
-    TBs_train = TBs_rndm_srt[0:split_ind,:]
-    TBs_test = TBs_rndm_srt[split_ind:,:]
-
-    return TBs_train, TBs_test, IWP_train, IWP_test, LWP_train, LWP_test, IWV_train, IWV_test
-
-def clip_nn_output(nn_prediction,truth=None):
-    
-    negative_predictions = np.round((len(nn_prediction[nn_prediction<0.])/len(nn_prediction))*100,2)
-    print(f"Negative predictions: {negative_predictions} %")
-
-    # clip nn output / predictions (= set negative values to zero)
-    nn_prediction_cliped = nn_prediction.copy()
-    nn_prediction_cliped[nn_prediction_cliped<0.]=0.
-    
-    if truth is not None:
-        # calculate bias before and after cliping
-        bias_before = np.mean(nn_prediction) - np.mean(truth)
-        bias_after = np.mean(nn_prediction_cliped) - np.mean(truth)
-
-        print("Bias before cliping: ",np.round(bias_before,2))
-        print("Bias after cliping: ",np.round(bias_after,2))
-
-    return nn_prediction_cliped
 
 def save_nn_train_test_retrieved_data(TBs_train, TBs_test, IWP_train, IWP_test, IWP_retrieved, nn_v):
     
@@ -1140,3 +1148,4 @@ def retrieve_IWP(TBs,altitude):
 
     return IWP, levels
     
+'''    
