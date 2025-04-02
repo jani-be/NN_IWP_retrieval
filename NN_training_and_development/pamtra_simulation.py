@@ -10,7 +10,7 @@ import pyPamtra
 from pyPamtra import meteoSI
 
 #%%
-# Choose Parameters
+# Choose Parameters #TODO In ein großes Dictionairy?
 DATE= "0829" #"0927" #"0824" #
 #NAME UNDER WHICH TO SAFE RUNS
 output_name = "all_area_v1"
@@ -20,9 +20,15 @@ w_lon = -62
 e_lon= -16
 n_lat=22
 flight_levels =[11400.0,11900.0,12650.0,13000.0,13250.0,13600.0,13900.0,14450.0,13900.0,15000.0	]
-division_factor =100000 #1000 leads to ~ 6000 n_spatial
+division_factor =1000 #1000 leads to ~ 6000 n_spatial
+try:
+    sys.argv
+except:
+    print("no DATE was given. Using now DATE",DATE)
+else:
+    DATE = (sys.argv[1])
+    print("pamtra simulation for DATE",DATE)    
 #%% reading file paths
-
 
 if DATE == "0829":
     appendix = "-high3Drate"
@@ -77,7 +83,7 @@ month = DATE[0:2]
 if DATE == "0829":
     t_periods = 4
 else:
-    t_periods = 10
+    t_periods = 5 #from 10
 t_steps =xr.date_range("2024-"+month+"-"+day+" 12:00:00",periods=t_periods,freq="4h")
 
 hyd=hyd.sel(time=t_steps) 
@@ -109,7 +115,7 @@ if DATE == "0829":
 
 
 
-#%% Index, spatial
+#%% Index, spatial, TODO: Auslagern? da auch von pamtra comparison genutzt
 
 lat = np.rad2deg(grid.clat.to_pandas()[frac_land.sea.to_pandas()==1])
 
@@ -217,30 +223,6 @@ frac_land = frac_land.sel(cell = common_idx)
 
 height = height.sel(height_2 = range(35,91))
 
-# seamask beachtne
-
-# give me cells of lon lat values of ....
-#ICON_lons = np.array(ICON.clon.values[:])
-#lons[t,:] = np.rad2deg(ICON_lons[rndm_ocean_profiles])
-#lat = np.deg2rad(12)
-#lon = np.deg2rad(-56)
-#>>> grid.clon.values[6000]
-#-0.9612835272738588
-
-#grid_small = grid.sel(clat=slice(lat,lat+1),clon=slice(lon,lon+1))
-
-#clat_deg = np.rad2deg(grid.clat)
-#starting point for just now 12.492500, -56.095667
-#slicen und selecten von kleiner Untermenge
-#TODO all_ocean_profiles = np.where(frac_land.sea==1)[0].tolist()
-
-# choose a random subsample of these cell indices of SAMPLESIZE
-#rndm_ocean_profiles = random.sample(all_ocean_profiles,SAMPLESIZE)
-
-#TODO select / iselect   
-#hyd=hyd.sel(ncells=rndm_ocean_profiles)
-#thermodyn=thermodyn.sel(ncells=rndm_ocean_profiles)
-#grid=grid.sel(ncells=rndm_ocean_profiles)
 
 
 
@@ -419,7 +401,7 @@ print("pamData filled")
 #print(for key in pamData.keys(): pamData[key].shape)
 
 # Save
-#np.save('/home/u/u301032/orcestra/NN_IWP_retrieval/NN_training_and_development/pamData_test_factor_10.npy', pamData) 
+np.save(f'/work/um0203/u301032/PAMTRA_output/PAMTRA-ICON_{DATE}_{output_name}.npy', pamData) 
 
 
 # Load
