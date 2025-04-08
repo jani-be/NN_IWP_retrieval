@@ -371,14 +371,14 @@ pamData["lon"] =  lons[:]
 
 # surface propertiesprin
 pamData["groundtemp"] = t_g[:]
-pamData["sfc_slf"] = fr_land[:]
-pamData["sfc_sif"] = np.zeros(pamData['groundtemp'].shape)[:] #Annahme, dass sea ice 0 ist
+pamData["sfc_slf"] = np.around(fr_land)[:]
+#pamData["sfc_sif"] = np.zeros(pamData['groundtemp'].shape)[:] #Annahme, dass sea ice 0 ist #kann weg
 pamData["wind10u"] = u10[:]
 pamData["wind10v"] = v10[:]
 pamData["sfc_type"] = np.around(pamData['sfc_slf'])[:]
 pamData["sfc_model"] = np.zeros(pamData['groundtemp'].shape)[:]
 pamData["sfc_refl"]  = np.chararray(pamData['groundtemp'].shape)[:]
-pamData["sfc_refl"][:] = 'S' # land  'F' # ocean 'L' lambertian, land
+pamData["sfc_refl"][:] =  'F' # ocean 'S' # land 'L' lambertian, land 
 #pamData["sfc_type"][(pamData['sfc_type'] == 0) & (pamData['sfc_sif'] > 0)] = 1 Nicht nötig, da Annahme, dass es kein sea ice gibt
 
 # vertical profiles
