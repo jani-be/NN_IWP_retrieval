@@ -2,7 +2,7 @@
 import numpy as np
 import xarray as xr
 from netCDF4 import Dataset
-import random
+import pandas as pd
 import sys
 sys.path.append('/home/u/u301032/pamtra/pamtra/python/pyPamtra')
 
@@ -12,22 +12,33 @@ from pyPamtra import meteoSI
 #%%
 # Choose Parameters #TODO In ein großes Dictionairy?
 DATE= "0829" #"0927" #"0824" #
+PART= "start" #"mid" #"end"
 #NAME UNDER WHICH TO SAFE RUNS
-output_name = "all_area_v1"
+output_name = "025x025_2h_v1" 
 #Extend of Simulation area:
 s_lat = -2
 w_lon = -62
 e_lon= -16
 n_lat=22
-flight_levels =[11400.0,11900.0,12650.0,13000.0,13250.0,13600.0,13900.0,14450.0,13900.0,15000.0	]
-division_factor =1000 #1000 leads to ~ 6000 n_spatial
+#flight_levels =[11400.0,11900.0,12650.0,13000.0,13250.0,13600.0,13900.0,14450.0,13900.0,15000.0	]#old 
+flight_levels =[11400.0,12650.0,13000.0,13250.0,13600.0,13850.0,14450.0,15000.0	]
+
+division_factor =1000 #1000 leads to ~ 6000 n_spatial    
+cell_selection = np.load('/home/u/u301032/orcestra/NN_IWP_retrieval/NN_training_and_development/cells_025x025_sea.npy')
+time_selection = "2h"
+frequency= time_selection
+#%%
+
 try:
     sys.argv
 except:
     print("no DATE was given. Using now DATE",DATE)
 else:
     DATE = (sys.argv[1])
-    print("pamtra simulation for DATE",DATE)    
+     
+    PART = (sys.argv[2])
+    
+    print("pamtra simulation for DATE",DATE,"part of time series",PART)    
 #%% reading file paths
 
 if DATE == "0829":
@@ -76,7 +87,52 @@ else:
 #timestamps for DATE == "0824"
 # selection of time stamps: 00,04,08,12,16,20, 24, 28, 32, 36 h
 # selection of time = 36:00h
+x=thermodyn
+if pd.Timedelta((x.time[-1]-x.time[0]).values,'h')<pd.Timedelta(25,'h'):
+    start_time ='12h'
+    t_periods = 4 # for old pamtra runs
+else:
+    start_time = '24h'  
+    t_periods = 5  # for old pamtra runs
+  # selecting time
+start=x.time[0].values+pd.Timedelta(start_time)
+stop=x.time[-1].values #last time step
+t_steps =xr.date_range(start,stop,freq=frequency)
+if DATE == "0829":
+    if PART == "start":
+        t_start=None
+        t_end=3
 
+    if PART == "mid":
+        t_start= 3
+        t_end = 5
+
+    if PART == "end":
+        t_start= 5
+        t_end = None
+else:
+    if PART == "p1":
+        t_start =None
+        t_end=3
+    if PART == "p2":
+        t_start=3
+        t_end=6
+    if PART == "p3":
+        t_start=6
+        t_end=9
+    if PART == "p4":
+        t_start=9
+        t_end=11
+    if PART == "p5":
+        t_start=11
+        t_end = None        
+t_steps=t_steps[t_start:t_end]
+if frequency=="4h":
+    t_steps =xr.date_range(x.time[0].values+pd.Timedelta("12h"),periods=t_periods,freq="4h")  # for old pamtra runs
+t_periods= len(t_steps)
+print("time steps used:",t_steps)
+"""
+# This is from old Runs:
 #Für Colocation : von 8 bis 20:00h
 day = DATE[2:5]
 month = DATE[0:2]
@@ -85,7 +141,8 @@ if DATE == "0829":
 else:
     t_periods = 5 #from 10
 t_steps =xr.date_range("2024-"+month+"-"+day+" 12:00:00",periods=t_periods,freq="4h")
-
+"""
+#%%
 hyd=hyd.sel(time=t_steps) 
 thermodyn=thermodyn.sel(time=t_steps) 
 twodim = twodim.sel(time=t_steps)
@@ -116,7 +173,7 @@ if DATE == "0829":
 
 
 #%% Index, spatial, TODO: Auslagern? da auch von pamtra comparison genutzt
-
+"""
 lat = np.rad2deg(grid.clat.to_pandas()[frac_land.sea.to_pandas()==1])
 
 lon=np.rad2deg(grid.clon.to_pandas()[frac_land.sea.to_pandas()==1])
@@ -137,57 +194,17 @@ else:
     lat=lat[(lat <= n_lat )&(lat >= s_lat)]
     lon=lon[(lon <= e_lon)&(lon >= w_lon)]
     
-    #idx_subsample=random.sample(sorted(common_idx.to_numpy()),8000)
+    #idx_subsample=random.sample(sorted(cell_selection.to_numpy()),8000)
 lon=lon[(lon <= e_lon)]
-common_idx=lon.index.intersection(lat.index)
-idx_list=common_idx.to_list()
+cell_selection=lon.index.intersection(lat.index)
+idx_list=cell_selection.to_list()
 #Reducing data size by factor 1000
-common_idx=idx_list[0::division_factor]
+cell_selection=idx_list[0::division_factor]
+"""
 #%% If random sample is wished
 
-'''
-#arr = np.zeros(len(common_idx))
-#i=0
-#while i <= len(common_idx):
-#    arr[i] = 1
-#    i=i+100
-
-#bool_arr = np.array(arr, dtype='bool') 
-
-#new_idx = common_idx.where(bool_arr).dropna()
-
-#common_idx= new_idx.astype('int64') 
-#idx_subsample=sorted(random.sample(sorted(common_idx),8000))
-#new_idx = common_idx.where(common_idx.isin(idx_subsample)) #funktioniert nicht
-
-#lat=lat[(lat <= 13)&(lat >= 12.9)]
-#lon=lon[(lon <= - 55.9)&(lon >= -56)]
-#common_idx = lon.index.intersection(lat.index) 
-#SAMPLESIZE= len(common_idx) #80
-
-##
-for i_lat in np.arange(s_lat -0.6,n_lat-0.6,1):
-    for i_lon in np.arange(s_lon -0.6,n_lon-0.6,1):
-        i_lat
-        i_lon
-        lat_idx=lat[(lat <= i_lat + 1.2)&(lat >= i_lat)]
-        lon_idx=lon[(lon <= i_lon +1.2)&(lon >= i_lon)]
-        i_common_idx=lon_idx.index.intersection(lat_idx.index)
-        len(i_common_idx)
-        len(common_idx)
-        common_idx=common_idx.union(i_common_idx)
-
-
-###
-
-
-#lat=lat[(lat <= 17.5)&(lat >= 2.5)]
-#lon=lon[(lon <= n_lon)&(lon >= s_lon)]
-#common_idx = lon.index.intersection(lat.index) 
-# random.sample(common_idx,4000)
-'''
 #%%
-SAMPLESIZE= len(common_idx) #n_spatial
+SAMPLESIZE= len(cell_selection) #n_spatial
 
 print(SAMPLESIZE)
 
@@ -209,17 +226,17 @@ thermodyn=thermodyn.drop_dims("bnds")
 frac_land = frac_land.drop_dims("nv")
 
 
-#hyd=hyd.isel(ncells=common_idx)
-hyd=hyd.sel(ncells=common_idx)
-thermodyn=thermodyn.sel(ncells=common_idx)
+#hyd=hyd.isel(ncells=cell_selection)
+hyd=hyd.sel(ncells=cell_selection)
+thermodyn=thermodyn.sel(ncells=cell_selection)
 
-# oder thermodyn=thermodyn.sel(ncells=common_idx)
+# oder thermodyn=thermodyn.sel(ncells=cell_selection)
 
-grid=grid.sel(cell=common_idx)
-height=height.sel(ncells=common_idx) 
-#sst=sst.isel(cell=common_idx)  # 
-twodim = twodim.sel(ncells=common_idx)
-frac_land = frac_land.sel(cell = common_idx)
+grid=grid.sel(cell=cell_selection)
+height=height.sel(ncells=cell_selection) 
+#sst=sst.isel(cell=cell_selection)  # 
+twodim = twodim.sel(ncells=cell_selection)
+frac_land = frac_land.sel(cell = cell_selection)
 
 height = height.sel(height_2 = range(35,91))
 
@@ -239,7 +256,7 @@ def flatten_1D_array_manually(ds):
 
 def flatten_2D_array_manually_old2(ds, dim="height"):
     #arr=np.fliplr(np.transpose(ds.values[:,:])) #das muss ich umdrehem
-    #ds =hyd.sel(ncells=common_idx).qv 
+    #ds =hyd.sel(ncells=cell_selection).qv 
     arr = np.zeros([SAMPLESIZE,56])
     h=np.arange(35.,91.,1)
     if dim=="height":
@@ -256,7 +273,7 @@ def flatten_2D_array_manually_old2(ds, dim="height"):
 
 def flatten_2D_array_manually(ds, dim="height"):
     #arr=np.fliplr(np.transpose(ds.values[:,:])) #das muss ich umdrehem
-    #ds =hyd.sel(ncells=common_idx).qv 
+    #ds =hyd.sel(ncells=cell_selection).qv 
     arr = np.zeros([SAMPLESIZE*t_periods,56])
     h=np.arange(35.,91.,1)
     for t in range(t_periods):
@@ -295,7 +312,7 @@ def flatten_2D_array_manually_other_option(ds, dim="height"):
 
 
 
-#ds =hyd.sel(ncells=common_idx).qv 
+#ds =hyd.sel(ncells=cell_selection).qv 
 #test1=flatten_2D_array_manually(ds)
 #test2=flatten_2D_array_manually_old(ds)
 #%%
@@ -492,13 +509,13 @@ pam.runParallelPamtra(
 
 # save pamtra simulation results to netcdf file
 pam.writeResultsToNetCDF(
-    f'/work/um0203/u301032/PAMTRA_output/PAMTRA-ICON_{DATE}_{output_name}.nc',
+    f'/work/um0203/u301032/PAMTRA_output/PAMTRA-ICON_{DATE}_{PART}_{output_name}.nc',
     xarrayCompatibleOutput=True)
 #/work/um0203/u301238/PAMTRA/PAMTRA_NN_training_data/PAMTRA-ICON_{DATE}_4000rndm-profiles_all_hamp_freqs_v4.nc
 # save integrated values of hydrometeors and water vapor to numpy array
 bulk_values = np.concatenate((np.squeeze(pam.p['hydro_wp']),pam.p['iwv']),axis=1).shape
 #np.save(f'/work/um0203/u301238/PAMTRA/PAMTRA_NN_training_data/PAMTRA-ICON_{DATE}_4000rndm-profiles_bulk_values_v5',bulk_values)
-np.save(f'/work/um0203/u301032/PAMTRA_output/PAMTRA-ICON_{DATE}_{output_name}_bulk_values_v5',bulk_values)
+np.save(f'/work/um0203/u301032/PAMTRA_output/PAMTRA-ICON_{DATE}_{PART}_{output_name}_bulk_values_v5',bulk_values)
 
 print("")
 print("*** PAMTRA simulation finished and netcdf files saved ***")
