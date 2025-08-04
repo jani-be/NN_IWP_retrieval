@@ -30,6 +30,10 @@ from matplotlib import cm
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.ndimage import gaussian_filter
 
+from glob import glob
+from functools import partial
+
+import fsspec
 #os.environ['TEXMFHOME'] = '/home/m/m301067/texmf'
 #os.environ['PATH'] = '/sw/spack-levante/texlive-live2021-l5o6sw/bin/x86_64-linux:' + os.environ['PATH']
 #plt.rcParams.update({'font.size': 13, 'font.family': 'TimesNewRoman', 'text.usetex': True})
@@ -40,7 +44,328 @@ from scipy.ndimage import gaussian_filter
 def format_longitude(x, pos):
     return f"{abs(int(x))}"
 
+
+
+
+def plotting(filename,ds):
+  #uses only left and bottom spines
+  # has path for saving
+  # has high resolution
+
+  fig, ax = plt.subplots()
+
+  #bins = np.arange(10050,15075,100) # final setting
+  #(n50_150, bins50_150, patches) = ax.hist(ds.alt, bins,orientation='horizontal')#,color='lightseagreen')#,density=True
+
+  #heights =[11400.0,12650.0,13000.0,13250.0,13600.0,13850.0,14450.0,15000.0	]
+  #plt.hlines(heights,xmin=0,xmax=n50_150.max()+0.1*n50_150.max(),color='black',zorder=0)#, color="mediumslateblue") 
+  #plt.vlines(heights,ymin=0,ymax=1, color="red")
+  
+  plt.ylabel("Height [m]")
+  plt.xlabel("Count per bin")
+
+
+  ax.spines['right'].set_visible(False)
+  ax.spines['top'].set_visible(False)
+
+  plt.rcParams['figure.dpi'] = 400
+  plt.rcParams['savefig.dpi'] = 400
+  #plt.savefig(f'/home/u/u301032/orcestra/plots/{filename}.png')
+  plt.show()
+
+def plotting_multiple(filename,ds):
+  #uses only left and bottom spines
+  # has path for saving
+  # has high resolution
+
+  # Create a figure with a 4x6 grid of subplots
+  fig, axes = plt.subplots(4, 6, figsize=(18, 12))
+  axes = axes.flatten()  # Flatten the 2D array of axes for easy iteration
+
+  for i, ax in enumerate(axes):
+#    freq=22.24
+#stacked_pamtra = ds_pamtra.tb.stack(flat_dim = ['grid_x','outlevel'])
+#fig, ax = plt.subplots()
+#ax.hist([stacked_pamtra.sel(frequency =freq),ds_halo.sel(frequency =freq).TBs_filtered],density=True,label=["pamtra","halo"])
+
+
+
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+  plt.ylabel("Height [m]")
+  plt.xlabel("Count per bin")
+  plt.rcParams['figure.dpi'] = 400
+  plt.rcParams['savefig.dpi'] = 400
+  #plt.savefig(f'/home/u/u301032/orcestra/plots/{filename}.png')
+  plt.show()
+
+
 # %%
+def only_tropics(ds):
+  ds=ds.sel(time=slice('2024-08-01','2024-10-01'))
+  return ds
+
+def reading_halo_data():
+  #DATE ="0829"
+
+  fs = fsspec.filesystem("ipns")
+  ##print(fs.glob("ipns://latest.orcestra-campaign.org/products/HALO/radiometer/*.zarr"))
+  #file_flight_0829="ipns://latest.orcestra-campaign.org/products/HALO/radiometer/HALO-20240829a.zarr"
+  #file_altitude = 'ipns://latest.orcestra-campaign.org/products/HALO/position_attitude/HALO-20240829a.zarr'
+
+  #ds_halo=xr.open_dataset(file_flight_0829,engine="zarr")
+  ds_halo=xr.open_dataset("ipfs://bafybeicbj76n3hi52pxtcyzu5in7efk36fk7lavauishclybrsbvlrpq3e", engine="zarr")#radiometer
+  #ds_halo_altitude = xr.open_dataset(file_altitude,engine ="zarr")
+  ds_halo_altitude = xr.open_dataset("ipfs://bafybeias3h5uxtt4ky4d4gn6l6gxjqfkzbde5jlunya6g3umnkvn7xoyoe", engine="zarr") #altitude
+  ds_halo_iwv_KW=xr.open_dataset("ipfs://bafybeicahqvp4lovuqpu63euo5kbc22sdq4jp5p6h6wib373x72ki34tiu", engine="zarr")#IWV from KW band
+  #ds_halo_iwv_KW=xr.open_dataset("ipns://latest.orcestra-campaign.org/products/HALO/iwv/HALO-20240829a.zarr",
+  #                engine="zarr")
+  ds_sondes = xr.open_dataset("ipfs://bafybeicb33v6ohezyhgq5rumq4g7ejnfqxzcpuzd4i2fxnlos5d7ebmi3m", engine="zarr")#dropsondes
+  ds_radar = xr.open_dataset("ipfs://bafybeigmd3dovwm45ylfqxnn2jphsrdjl2jt3dfytv7grkyhleaq42jthe", engine="zarr") #MIRA Cloud Radar Moments
+
+  return only_tropics(ds_radar),only_tropics(ds_halo),only_tropics(ds_halo_altitude),only_tropics(ds_halo_iwv_KW),ds_sondes
+
+def sel_target_date(target_date,ds):
+  target_datetime = pd.to_datetime(target_date)
+  if 'time' in ds.coords:
+     ds_filtered=ds.sel(time=slice(target_datetime, target_datetime + pd.Timedelta(days=1)))
+  elif 'sonde_time' in ds.coords:
+    ds_filtered = ds.where(ds['sonde_time'].dt.date == xr.DataArray(pd.to_datetime(target_date).date()), drop=True)
+  else:
+    print("please check dimension names for time dimension")
+  return ds_filtered
+
+def add_noise(clean_signal,sigma=0.75):
+    
+    mu = 0
+    
+    noise = np.random.normal(mu, sigma, clean_signal.shape) 
+    noisy_signal = clean_signal + noise
+    
+    return noisy_signal
+
+def get_HAMP_freqs_of(select='all_2side'):
+    """
+    Function to return frequenices of specified HAMP channel(s).
+    """
+  
+    HAMP_freqs = {'K_band':[22.24,23.04,23.84,25.44,26.24,27.84,31.40],
+                  'V_band':[50.30,51.76,52.8,53.75,54.94,56.66,58.00],
+                  'W_band':[90.00],
+                  'F_band_1side':[118.75+1.4,118.75+2.3,118.75+4.2,118.75+8.5],
+                  'F_band_2side':[118.75-8.5,118.75-4.2,118.75-2.3,118.75-1.4,
+                                  118.75+1.4,118.75+2.3,118.75+4.2,118.75+8.5],
+                  'G_band_1side':[183.31+0.6,183.31+1.5,183.31+2.5,183.31+3.5,183.31+5.0,183.31+7.5,183.31+12.5],
+                  'G_band_2side':[183.31-12.5,183.31-7.5,183.31-5.0,183.31-3.5,183.31-2.5,183.31-1.5,183.31-0.6,
+                                  183.31+0.6,183.31+1.5,183.31+2.5,183.31+3.5,183.31+5.0,183.31+7.5,183.31+12.5],
+                  'NN_freqs':[22.24,23.04,23.84,25.44,26.24,27.84,31.40,
+                              50.30,51.76,52.8,53.75,54.94,56.66,58.00,
+                              90.00,
+                              118.75+1.4,118.75+2.3,118.75+4.2,118.75+8.5,
+                              183.31+0.6,183.31+2.5,183.31+3.5,183.31+5.0,183.31+7.5],
+                 }
+    
+    
+    if select == 'all_1side':
+        freqs = np.concatenate((
+            np.array(HAMP_freqs['K_band']),
+            np.array(HAMP_freqs['V_band']),
+            np.array(HAMP_freqs['W_band']),
+            np.array(HAMP_freqs['F_band_1side']),
+            np.array(HAMP_freqs['G_band_1side']),))
+            
+    elif select == 'all_2side':
+        freqs = np.concatenate((
+            np.array(HAMP_freqs['K_band']),
+            np.array(HAMP_freqs['V_band']),
+            np.array(HAMP_freqs['W_band']),
+            np.array(HAMP_freqs['F_band_2side']),
+            np.array(HAMP_freqs['G_band_2side']),))
+   
+    else:
+        freqs = HAMP_freqs[select]
+            
+    return np.array(freqs)
+
+
+def create_pamtra_TB_vector(pamtra_ds,outlevels):
+
+    # select "nadir looking" BTs
+    pamtra_ds = pamtra_ds.sel(angles=180,grid_y=0)
+    pamtra_ds = pamtra_ds.drop(['grid_y','angles'])
+    # average over v and h polarisation
+    pamtra_ds = pamtra_ds.mean(dim='passive_polarisation')
+    # get indices of specified altitudes
+    level_inds = [np.where(pamtra_ds.outlevels.values[0,:].squeeze() == level)[0][0] for level in outlevels]
+    # select pamtra dataset at specified altitudes
+    pamtra_ds = pamtra_ds.sel(outlevel=xr.DataArray(level_inds,dims=['outlevel']))
+    
+    # select arrays of BTs of K,V,W band
+    K_band = pamtra_ds.tb.sel(frequency=get_HAMP_freqs_of('K_band')).values[:,:,:]
+    V_band = pamtra_ds.tb.sel(frequency=get_HAMP_freqs_of('V_band')).values[:,:,:]
+    W_band = pamtra_ds.tb.sel(frequency=get_HAMP_freqs_of('W_band')).values[:,:].reshape(pamtra_ds.tb.values.shape[0],len(outlevels),1)
+    
+    # average over doubleside frequencies of F_band
+    TB_120_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([118.75-1.4, 118.75+1.4],dims='frequency')),axis=2)
+    TB_121_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([118.75-2.3, 118.75+2.3],dims='frequency')),axis=2)
+    TB_122_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([118.75-4.2, 118.75+4.2],dims='frequency')),axis=2)
+    TB_127_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([118.75-8.5, 118.75+8.5],dims='frequency')),axis=2)
+    # create array of BTs of F_band
+    F_band = np.empty([K_band.shape[0],len(outlevels),4])
+    F_band[:,:,0] = TB_120_mean
+    F_band[:,:,1] = TB_121_mean
+    F_band[:,:,2] = TB_122_mean
+    F_band[:,:,3] = TB_127_mean
+
+    # average over doubleside frequencies of G_band
+    TB_183_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([183.31-0.6, 183.31+0.6],dims='frequency')),axis=2)
+    TB_184_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([183.31-1.5, 183.31+1.5],dims='frequency')),axis=2)
+    TB_185_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([183.31-2.5, 183.31+2.5],dims='frequency')),axis=2)
+    TB_186_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([183.31-3.5, 183.31+3.5],dims='frequency')),axis=2)
+    TB_188_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([183.31-5.0, 183.31+5.0],dims='frequency')),axis=2)
+    TB_190_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([183.31-7.5, 183.31+7.5],dims='frequency')),axis=2)
+    TB_195_mean = np.mean(pamtra_ds.tb.sel(frequency=xr.DataArray([183.31-12.5, 183.31+12.5],dims='frequency')),axis=2)
+    # create array of BTs of G_band
+    G_band = np.empty([K_band.shape[0],len(outlevels),5])
+    G_band[:,:,0] = TB_183_mean
+    G_band[:,:,1] = TB_185_mean
+    G_band[:,:,2] = TB_186_mean
+    G_band[:,:,3] = TB_188_mean
+    G_band[:,:,4] = TB_190_mean
+    #G_band = replace_outliers_with_CHmean(G_band,lower_thrs=230)
+
+    TB_vector = np.concatenate((
+        K_band,
+        V_band,
+        W_band,
+        F_band,
+        G_band),
+        axis=2)
+    
+    #print("\nCreated ",TB_vector.shape, " TB input vector")
+    return TB_vector
+
+def _preprocess(x,cells,frequency="2h"):#, end_time="48h" ):
+  # selecting variables of interest
+  variables = [
+    'prw', #water vapor path
+    'qivi', #cloud ice path
+    'cllvi', #cloud liquid water path
+    'qrvi', #rain path
+    'qsvi', #snow path
+    'qgvi' #graupel path
+  ]
+  x=x[variables]
+  
+  if pd.Timedelta((x.time[-1]-x.time[0]).values,'h')<pd.Timedelta(25,'h'):
+    start_time ='12h'
+    t_periods = 4 # for old pamtra runs
+  else:
+    start_time = '24h'  
+    t_periods = 5  # for old pamtra runs
+  # selecting time
+  start=x.time[0].values+pd.Timedelta(start_time)
+  stop=x.time[-1].values #last time step
+  t_steps =xr.date_range(start,stop,freq=frequency)
+  if frequency=="4h":
+      t_steps =xr.date_range(x.time[0].values+pd.Timedelta("12h"),periods=t_periods,freq="4h")  # for old pamtra runs
+  #print(start)
+  return x.sel(time=t_steps,ncells=cells)
+
+def read_example_2d_file(DATE="0829",appendix = "-high3Drate",preprocess=False,cells=[],frequency="2h"):
+    path_sim = "/work/mh0492/m301067/orcestra/icon-mpim/build-lamorcestra/experiments/"
+    twodim_file = path_sim + f"orcestra_1250m_{DATE+appendix}/" + f"orcestra_1250m_{DATE+appendix}_atm_2d_ml_DOM01_2024{DATE}T000000Z.nc"
+    if preprocess:
+        ds= _preprocess(xr.open_dataset(twodim_file),cells,frequency)
+    else:
+        ds =xr.open_dataset(twodim_file)
+    return ds
+
+def load_nn_training_data_pamtra(pamtra_file_names,altitude=12500,noise=True):
+    
+    #print("Loading PAMTRA training data (TBs)...")
+    # create list of all pamtra simulations of retrieval database
+    # create list of all pamtra simulations of retrieval database 
+    
+    #pamtra_files = sorted(glob('/work/um0203/u301238/PAMTRA/PAMTRA_NN_training_data/PAMTRA-ICON_2022041*_4000rndm-profiles_all_hamp_freqs_v3.nc'))
+    pamtra_files = sorted(glob(pamtra_file_names))
+
+
+    # open them as one concatenated multifile dataset
+    pamtra = xr.open_mfdataset(
+        pamtra_files,
+        combine='nested',
+        concat_dim='grid_x')
+
+    # create a (profile,frequency) TB input vector out of the PAMTRA simulated TBs 
+    # by averaging over all doubleside frequencies
+    TB_input_vector = create_pamtra_TB_vector(pamtra,outlevels=[altitude])
+    TB_input_vector = TB_input_vector[:,0,:]
+    if noise == True:
+        # Add random noise to the simulated TBs
+        for channel in range(TB_input_vector.shape[1]):
+            if (channel >= 0) & (channel <= 6): # K-Band
+                TB_input_vector[:,channel] = add_noise(TB_input_vector[:,channel],sigma=0.1)
+            if (channel >= 7) & (channel <= 13): # V-Band
+                TB_input_vector[:,channel] = add_noise(TB_input_vector[:,channel],sigma=0.2)
+            if channel == 14: # W-Band
+                TB_input_vector[:,channel] = add_noise(TB_input_vector[:,channel],sigma=0.25)
+            if (channel >= 15) & (channel <= 18): # F-Band
+                TB_input_vector[:,channel] = add_noise(TB_input_vector[:,channel],sigma=0.6)
+            if (channel >= 19) & (channel <= 23): # G-Band
+                TB_input_vector[:,channel] = add_noise(TB_input_vector[:,channel],sigma=0.6)
+
+    # Load in numpy arrays containing ICON hydrometeor contents of PAMTRA simulations       # TODO change to 2D files, select
+    return TB_input_vector 
+
+def load_nn_training_data_icon(dates,appendices,cell_selection,time_selection):
+    
+ 
+    '''
+    Insert here hydrometer from 2D and selection
+    '''
+    # Getting list of 2D icon files to use
+    path_sim = "/work/mh0492/m301067/orcestra/icon-mpim/build-lamorcestra/experiments/"
+    twodim_files=[]
+    for DATE, appendix in zip(dates,appendices):
+        twodim_files.append(path_sim + f"orcestra_1250m_{DATE+appendix}/orcestra_1250m_{DATE+appendix}_atm_2d_ml_DOM01_2024{DATE}T000000Z.nc")
+
+    #Reading and First Processing of datasets
+    partial_func = partial(_preprocess,cells=cell_selection,frequency=time_selection) 
+    ds_icon_2d= xr.open_mfdataset(twodim_files,preprocess=partial_func)#, chunks={"ncells": -1})#,chunks="auto", parallel=True)
+
+    #ICON_arrays = np.load(ICON_array_list[0])
+    #for i in range(1,len(ICON_array_list)):
+    #    ICON_arrays = np.concatenate((ICON_arrays,np.load(ICON_array_list[i])),axis=0)
+    t_steps=ds_icon_2d.time.values
+    IWV= np.concatenate(([(ds_icon_2d.prw.sel(time=t))for t in t_steps ]),axis=0) #water vapor path
+
+    # cloud ice
+    #IWP= np.concatenate(([(ds_icon_2d.qivi.sel(time=t))for t in t_steps ]),axis=0)
+    # liquid water
+    #LWP= np.concatenate(([(ds_icon_2d.cllvi.sel(time=t))for t in t_steps ]),axis=0)
+
+    qivi= np.concatenate(([(ds_icon_2d.qivi.sel(time=t))for t in t_steps ]),axis=0) #cloud ice path
+    qgvi= np.concatenate(([(ds_icon_2d.qgvi.sel(time=t))for t in t_steps ]),axis=0) #graupel path
+    qsvi= np.concatenate(([(ds_icon_2d.qsvi.sel(time=t))for t in t_steps ]),axis=0) #snow path
+    IWP= np.sum([qivi,qgvi,qsvi], axis=1)
+
+    cllvi= np.concatenate(([(ds_icon_2d.cllvi.sel(time=t))for t in t_steps ]),axis=0)  #cloud liquid water path
+    qrvi= np.concatenate(([(ds_icon_2d.qrvi.sel(time=t))for t in t_steps ]),axis=0) #rain path
+    LWP = np.sum([cllvi,qrvi], axis=1)
+
+    return IWV,IWP,LWP,qivi,qgvi,qsvi,cllvi,qrvi,t_steps #, frozen_water, liquid_water, IWV
+
+
+
+
+
+
+
+
+
+
+
 def remap(ds,ires=3,input_core_dim="ncells"):
     """
     Uses the weights given by sim for remapping

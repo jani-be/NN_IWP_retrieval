@@ -13,6 +13,32 @@ import xarray as xr
 from math import radians, cos, sin, asin, sqrt, atan2
 
 
+
+def plotting(filename,ds):
+  #uses only left and bottom spines
+  # has path for saving
+  # has high resolution
+
+  fig, ax = plt.subplots()
+
+  bins = np.arange(10050,15075,100) # final setting
+  (n50_150, bins50_150, patches) = ax.hist(ds.alt, bins,orientation='horizontal')#,color='lightseagreen')#,density=True
+
+  heights =[11400.0,12650.0,13000.0,13250.0,13600.0,13850.0,14450.0,15000.0	]
+  plt.hlines(heights,xmin=0,xmax=n50_150.max()+0.1*n50_150.max(),color='black',zorder=0)#, color="mediumslateblue") 
+  #plt.vlines(heights,ymin=0,ymax=1, color="red")
+  plt.ylabel("Height [m]")
+  plt.xlabel("Count per bin")
+
+
+  ax.spines['right'].set_visible(False)
+  ax.spines['top'].set_visible(False)
+
+  plt.rcParams['figure.dpi'] = 400
+  plt.rcParams['savefig.dpi'] = 400
+  plt.savefig(f'/home/u/u301032/orcestra/plots/{filename}.png')
+  plt.show()
+
 def get_HAMP_freqs_of(select='all_2side'):
     """
     Function to return frequenices of specified HAMP channel(s).

@@ -13,7 +13,7 @@ import sys
 sys.path.append('/home/u/u301032/pamtra/pamtra/python/pyPamtra')
 import pyPamtra
 
-
+from pyPamtra import meteoSI
 
 
 #%%
@@ -192,6 +192,7 @@ crc = flatten_2D_array_manually(rain.qr) #
 #rh = 26.3 * p * q * 1/(np.exp((17.67(T-273.16))/(T-29.65)))
 rh = 100* relative_humidity_from_specific_humidity(thermodyn.pfull,thermodyn.ta , hyd.qv)
 #rh = relative_humidity_from_specific_humidity(thermodyn.pfull * units.hPa,thermodyn.ta * units.degC, hyd.qv).to('percent')
+#pyrh=100*meteoSI.q2rh(q,t,p)
 rh = flatten_2D_array_manually(rh)
 
 # combine all atmospheric composition parameters to one array for saving
