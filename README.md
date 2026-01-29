@@ -1,32 +1,40 @@
 # NN_IWP_retrieval
-This repository contains all necassary files of the neural-network-based IWP retrieval for the HALO-AC3 observations. In general, the retrieval consists of 30 identical neural networks having the following architecture:
+This repository contains all necassary files of the neural-network-based IWV, LWP and IWP retrieval for the HALO-PERCUSION observations. In general, the retrieval consists of identical neural networks having the following architecture:
 
 <img width="594" alt="Screenshot 2023-11-07 at 18 17 49" src="https://github.com/MaxRing96/NN_IWP_retrieval/assets/62293752/a9208f42-d2eb-40bc-ac96-d002d60f22cc">
 
-For each of 10 altitude levels between 8.5 km and 13 km, three nerual networks have been trained on different random subsamples of the same train/test dataset.
-Last one was created by a coupled model set-up of ICON and PAMTRA. The final retrieval outputs an average of the three networks trained at the altitude level closest to the actual HAMP observation. Detailed information about the retrieval and its development can be found in the master's thesis document.
+For each of 8 altitude levels between 11 km and 15 km, three nerual networks have been trained separatley for IWP LWP and IWV.
+The training/testing dataset was created by a coupled model set-up of ICON and PAMTRA. The final retrieval outputs closest to the altitude level closest to the actual HAMP observation. Detailed information about the retrieval and its development can be found in the master's thesis document.
 
-All the trained neural networks itself are saved under the [NNs](NNs) directory. Along with these networks the (ICON-PAMTRA) train and test data used for each of the networks is saved as netcdf files under [train_test_data](NNs/train_test_data).
-Figures displaying the [loss](NNs/testing_loss) during training as well as the network predictions for each of their test data set (as [probability density functions](NNs/testing_pdfs) and [scatterdensity](NNs/testing_scatterdensity) plots) are saved.
+All the trained neural networks itself are saved under the [NNs](NNs) directory.
 
-The python script [src.py](src.py) contains some basic functions used in the other scripts, while [nn_iwp_retrieval.py](nn_iwp_retrieval.py) contains the core function of the neural network retrieval. 
-The jupyter notebook [retrieval_quicklooks.ipynb](retrieval_quicklooks.ipynb) can be used to apply the retrieval on the individual HALO-AC3 research flights and to plot its results along with the HAMP radar and radiometer data. An example is shown here for HALO-AC3 research flight 5:
+### For training and development of the Neural Networs these Notebooks have been used:
 
-![example](https://github.com/MaxRing96/NN_IWP_retrieval/assets/62293752/b59ffbf3-5218-49da-adaa-7c712335cd9e)
+- Subselection of hydrometeors compared to all hydrometeors in [NNs/hydrometeor-climatology.ipynb](NNs/hydrometeor-climatology.ipynb)
+- Saving training and testing data as numpy arrays for keras [NN/prep-for-NN-training.py](NN/prep-for-NN-training.py)
+- Development and Training of NNs [NNs/NN_development.ipynb](NNs/NN_development.ipynb) with source code in [NNs/src.py](NNs/src.py)
 
-However, the radar and radiometer data is not included in this repository and has to be downloaded seperately in order to use the notebook. The notebook just serves as an example for the retrieval application, but is not needed for the retrieval application in general
+### The analysis of the retrieved data is in:
+- [retrieval-product-analysis.ipynb](retrieval-product-analysis.ipynb)
+
+### The analysis of hydrometeors to cloud level and IWV is in:
+- [cloud-layers.ipynb](cloud-layers.ipynb) with additional plots in [Additional_plots.ipynb](Additional_plots.ipynb)
+
+
+
+However, the radar and radiometer data is not included in this repository and has to be downloaded seperately.
 
 ## How to apply the retrieval?
-To apply the retrieval on the HALO-AC3 HAMP radiometer observations, you only need to download this repository (the notebook is not needed) along with the following python packages:
+To apply the retrieval on the HALO-PERCUSION HAMP radiometer observations, you only need to download this repository (the notebook is not needed) along with the following python packages:
   - numpy
   - xarray
   - tensorflow
   - glob
 
-as well as the HAMP radiometer data (no public server so far).
+as well as the HAMP radiometer data.
 
-To retrieve the IWP from the HAMP radiometer (=brightness temperature) observations you have to `from nn_iwp_retrieval import retrieve_IWP` and use the retrieval function as `retrieve_IWP(HAMP_TBs,HAMP_alt)`.
-Further detailed information, e.g. how the two arrays of HAMP brightness temperatures (HAMP_TBs) and observation altitudes (HAMP_alt) have to be arranged, can be found within the [nn_iwp_retrieval.py](nn_iwp_retrieval.py) script.
 
-If you have questions or comments on the retrieval you can contact me via: maximilian_ringel@icloud.com.
+
+
+
 

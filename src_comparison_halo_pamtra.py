@@ -495,3 +495,213 @@ def coarse_for_pamtra(ds,s_lat = -2,w_lon = -62,e_lon= -16,n_lat=22,res=1):
   lon_range=np.arange(w_lon,e_lon+0.49*res,res)  
   ds=ds.sel(lat=lat_range,lon=lon_range,method="nearest")
   return ds
+
+def pamtra_TBs_all_heights_combined(name_pamtra_run,flight_levels =[11400,12650,13000,13250,13600,13850,14450,15000] ):
+  altitude=flight_levels[0]
+  TBs=np.load('/work/um0203/u301032/master_thesis/ML_input/' + name_pamtra_run + '_TBs_altitude_' + str(altitude) + 'm.npy')
+  for altitude in flight_levels[1:]:
+      TB=np.load('/work/um0203/u301032/master_thesis/ML_input/' + name_pamtra_run + '_TBs_altitude_' + str(altitude) + 'm.npy')
+      TBs=np.concatenate([TBs,TB])
+  return TBs
+
+def halo_BT_read_in():
+  ds_radar,ds_halo,ds_halo_altitude,ds_halo_iwv_KW,ds_sondes=reading_halo_data()
+  
+  #ds_halo no sea please
+  da_masked = ds_halo.TBs.where(ds_halo.mask_sea_land, drop=True)
+
+  # use amplifier fault mask and land sea mask
+  da_masked = da_masked.where(ds_halo.mask_amplifier_fault, drop=True)
+
+    # filter 90 GHz channel for unrealitstic temperatures
+  mask_90=(ds_halo.sel(frequency=90.).TBs<320).drop_vars('frequency') # 38  caases over 320
+  da_masked = da_masked.where(mask_90, drop=True)
+  #cut altitude:
+  da_masked = da_masked.where(ds_halo.plane_altitude>=10500,drop=True)
+
+  # add filtered data array to variable
+  ds_halo['TBs']=  da_masked
+  excluded_frequencies = ds_halo.frequency.where(ds_halo.frequency!=184.81, drop=True)
+  # Step 2: Filter the dataset to exclude the specified frequency
+  ds_halo = ds_halo.sel(frequency=excluded_frequencies)
+  return ds_halo
+
+def pamtra_BT_read_in(pamtra_file_names):
+  pamtra_files = sorted(glob(pamtra_file_names))
+
+  # open them as one concatenated multifile dataset
+  ds_pamtra = xr.open_mfdataset(
+      pamtra_files,
+      combine='nested',
+      concat_dim='grid_x')
+
+  # select "nadir looking" BTs
+  ds_pamtra = ds_pamtra.sel(angles=180,grid_y=0)
+  ds_pamtra = ds_pamtra.drop_vars(['grid_y','angles'])
+  # average over v and h polarisation
+  ds_pamtra = ds_pamtra.mean(dim='passive_polarisation')
+
+  return ds_pamtra
+
+
+def pamtra_halo_BT_plot(ds_halo, ds_pamtra,freq=90.):
+  #
+  
+  # For the histograms we want data from all outlevels
+  stacked_pamtra = ds_pamtra.tb.stack(flat_dim = ['grid_x','outlevel'])
+  plt.xlabel('BTs [K]')
+  plt.hist([stacked_pamtra.sel(frequency =freq),ds_halo.sel(frequency =freq).TBs],bins=np.arange(np.min(ds_halo.TBs),np.max(ds_halo.TBs)),density=True,label=["pamtra","halo"])
+  
+  plt.legend()
+  plt.title(str(freq))
+  plt.show()
+
+def plotting_multiple_with_noise(filename=None,density=True,log=False):
+
+  # Creates plot of all frequenciesHstograms of BTs PAMTRA vs HAMP
+  # uses only left and bottom spines
+  # has path for saving
+  # has high resolution
+
+  # read in PAMTRA and HAMP files
+
+  ds_halo = halo_BT_read_in()
+  name_pamtra_run = "cells_025x025_2h"#"all_area_1000th_cell" # 
+  TBs = pamtra_TBs_all_heights_combined(name_pamtra_run)
+
+
+  plt.rcParams['font.size'] = '16'
+  # Create a figure with a 6x4 grid of subplots
+  fig, axes = plt.subplots(6, 4, sharex=True,sharey=True, figsize=(16, 24))
+  #fig, axes = plt.subplots(6, 4,figsize=(16, 24))
+  axes = axes.flatten()  # Flatten the 2D array of axes for easy iteration
+  maxval = max(np.nanmax(ds_halo.TBs),np.nanmax(TBs))
+  minval = min(np.nanmin(ds_halo.TBs),np.nanmin(TBs))
+  bins=np.arange(minval,maxval,20)#(np.min(ds_halo.TBs),np.max(ds_halo.TBs),20)
+  for i, ax in enumerate(axes):
+    freq=np.array(ds_halo.frequency)[i]
+    ax.hist([TBs[:,i],ds_halo.sel(frequency =freq).TBs],bins=bins,density=density,log=log,label=["pamtra","halo"])
+    # calculate bias and plot bias
+    bias=np.mean(TBs[:,i])-np.mean(ds_halo.sel(frequency =freq).TBs)
+    ax.text(0.05, 0.8, str(np.round(bias.values,2))+' K', transform=ax.transAxes,
+      fontsize=20,  va='top')
+    ax.text(0.05, 1.0, str(freq)+ ' GHz', transform=ax.transAxes,
+      fontsize=20,  va='top')
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+  fig.supxlabel('Brightness Temperatures \\K')
+  plt.tight_layout()
+  plt.rcParams['figure.dpi'] = 400
+  plt.rcParams['savefig.dpi'] = 400
+  if filename != None:
+      plt.savefig(f'/home/u/u301032/orcestra/plots/BT_pamtra_hamp_noise_height_{filename}.png')
+  plt.show()
+  
+def plotting_fav4_noise(filename=None,density=True,log=False,indices=[0,14,19,23]):
+
+  # Creates plot of all frequenciesHstograms of BTs PAMTRA vs HAMP
+  # uses only left and bottom spines
+  # has path for saving
+  # has high resolution
+
+  # read in PAMTRA and HAMP files
+
+  ds_halo = halo_BT_read_in()
+  name_pamtra_run = "cells_025x025_2h"#"all_area_1000th_cell" # 
+  TBs = pamtra_TBs_all_heights_combined(name_pamtra_run)
+
+
+  plt.rcParams['font.size'] = '16'
+  # Create a figure with a 6x4 grid of subplots
+  ##fig = plt.figure(figsize=(16, 8),constrained_layout=True)
+  fig = plt.figure(figsize=(16, 8),constrained_layout=True)
+  subfigs = fig.subfigures(1, 4)
+  ##fig, axes = plt.subplots(6, 4, figsize=(16, 24))
+  #fig, axes = plt.subplots(6, 4,figsize=(16, 24))
+  ##axes = axes.flatten()  # Flatten the 2D array of axes for easy iteration
+  maxval = max(np.nanmax(ds_halo.TBs),np.nanmax(TBs))
+  minval = min(np.nanmin(ds_halo.TBs),np.nanmin(TBs))
+  bins=np.arange(minval,maxval,20)#(np.min(ds_halo.TBs),np.max(ds_halo.TBs),20)
+  for i, subfig, title in zip(indices,subfigs.flat, ['a)','b)','c)','d)']):     
+    freq=np.array(ds_halo.frequency)[i]
+    #subfig.suptitle(' ',ha='left')
+    subfig.text(0.0, 1.0, title, #transform=ax.transAxes,
+                               fontsize='large',  va='top')
+    axs = subfig.subplot_mosaic([['lin'],['log']],
+                                  height_ratios=(1, 1), sharex=True)
+
+     
+    axs['lin'].hist([TBs[:,i],ds_halo.sel(frequency =freq).TBs],bins=bins,density=density,log=False,label=["pamtra","halo"])
+    # calculate bias and plot bias
+    bias=np.mean(TBs[:,i])-np.mean(ds_halo.sel(frequency =freq).TBs)
+    if bias >= 0:
+      label= '+' + str(np.round(bias.values,2))+' K'
+    else:
+      label= str(np.round(bias.values,2))+' K'
+    axs['lin'].set_title(str(freq)+ ' GHz', loc='left', fontsize='large',weight='semibold')
+    #axs['lin'].text(0.05, 0.1, str(np.round(bias.values,2))+' K',# transform=axs['lin'].transAxes,
+    #  fontsize=20,  va='top')
+    #axs['lin'].text(0.05, 0.5, str(freq)+ ' GHz', #transform=axs['lin'].transAxes,
+    #  fontsize=20,  va='top')
+    axs['lin'].annotate(
+        label,
+        xy=(0, 1), xycoords='axes fraction',
+        xytext=(+0.5, -0.5), textcoords='offset fontsize',
+        fontsize='medium', verticalalignment='top',color='slategray')
+
+    axs['log'].hist([TBs[:,i],ds_halo.sel(frequency =freq).TBs],bins=bins,density=density,log=True,label=["pamtra","halo"])
+    # calculate bias and plot bias
+    axs['lin'].set_ylim(top=0.05)
+    axs['log'].set_ylim(top=0.1,bottom=2*10**(-8))
+    axs['log'].spines['right'].set_visible(False)
+    axs['log'].spines['top'].set_visible(False)
+    axs['lin'].spines['right'].set_visible(False)
+    #axs['lin'].spines['top'].set_visible(False)
+    subfig.supxlabel('BT \\ K')
+  #plt.tight_layout()
+  plt.rcParams['figure.dpi'] = 400
+  plt.rcParams['savefig.dpi'] = 400
+  if filename != None:
+      plt.savefig(f'/home/u/u301032/orcestra/plots/BT_pamtra_hamp_noise_height_fav4_{filename}.png')
+  plt.show()
+
+def plotting_multiple_no_noise(filename=None,density=True,log=False):
+
+  # Creates plot of all frequenciesHstograms of BTs PAMTRA vs HAMP
+  # uses only left and bottom spines
+  # has path for saving
+  # has high resolution
+
+  # read in PAMTRA and HAMP files
+  pamtra_files='/work/um0203/u301032/PAMTRA_output/PAMTRA-ICON_0829*_025x025_2h_v1.nc'
+
+  ds_halo = halo_BT_read_in(pamtra_files)
+  ds_pamtra = pamtra_BT_read_in(pamtra_files)
+
+
+  plt.rcParams['font.size'] = '16'
+  # Create a figure with a 6x4 grid of subplots
+  fig, axes = plt.subplots(6, 4, sharex=True,sharey=True, figsize=(16, 24))
+  #fig, axes = plt.subplots(6, 4,figsize=(16, 24))
+  axes = axes.flatten()  # Flatten the 2D array of axes for easy iteration
+  # Stacking pamtra array in order to include all pamtra outputlevels
+  stacked_pamtra = ds_pamtra.tb.stack(flat_dim = ['grid_x','outlevel'])
+  bins=np.arange(np.min(ds_halo.TBs),np.max(ds_halo.TBs),20)
+  for i, ax in enumerate(axes):
+    freq=np.array(ds_halo.frequency)[i]
+    ax.hist([stacked_pamtra.sel(frequency =freq),ds_halo.sel(frequency =freq).TBs],bins=bins,density=density,log=log,label=["pamtra","halo"])
+    
+    ax.text(0.05, 1.0, str(freq), transform=ax.transAxes,
+      fontsize=20,  va='top')
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+  fig.supxlabel('Brightness Temperatures \\K')
+  plt.tight_layout()
+  plt.rcParams['figure.dpi'] = 400
+  plt.rcParams['savefig.dpi'] = 400
+  if filename != None:
+      plt.savefig(f'/home/u/u301032/orcestra/plots/{filename}.png')
+  plt.show()
+
+
+# %%

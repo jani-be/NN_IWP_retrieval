@@ -1,320 +1,356 @@
 """
-Training of Neural Network
-
-This script trains the Neural Network for all hights and all hydrometeors.
-
- Here one can enter the findings from from NN-development.ipnyb
+Plots additional to NN training
  """
 
 
 #%%
-import tensorflow as tf
-#import levenberg_marquardt as lm
-import scipy.stats
-from sklearn.preprocessing import MinMaxScaler
-from mpl_toolkits.axes_grid1 import make_axes_locatable
+#%% Loading packages
 import numpy as np
-import datetime as dt
+import matplotlib.ticker as ticker
 import pandas as pd
-import matplotlib.pyplot as plt
-from netCDF4 import Dataset
-import seaborn as sns
-from glob import glob
 import xarray as xr
-#import typhon as ty
+import matplotlib.pyplot as plt
+import scipy.stats
+import fsspec
+from matplotlib import cm
+from matplotlib.colors import Normalize 
+from scipy.interpolate import interpn
+import glob
+from functools import partial
 import sys
-#sys.path.append('/home/u/u301238/master_thesis/')
 sys.path.append('/home/u/u301032/orcestra/NN_IWP_retrieval/NN_training_and_development/')
 print(sys.path)
+from src import retrieval_dev_fcts as dev
+from src import retrieval_plots as rp
+#sys.path.append('/home/u/u301238/master_thesis/')
+sys.path.append('/home/u/u301032/orcestra/NN_IWP_retrieval/')
 #import src
+#import src_comparison_halo_pamtra as chp
 
-# Make NumPy printouts easier to read.
-np.set_printoptions(precision=3, suppress=True)
-
-
-#%% PARAMETERS
-
-variable = 'IWV' # 'IWP' # 'LWP' #
-training_version = "v1"
-name_pamtra_run = "cells_025x025_2h"#"all_area_1000th_cell" # 
-flight_levels =[11400,12650,13000,13250,13600,13850,14450,15000	]
+import matplotlib.colors as colors
+#import cartopy.crs as ccrs
+#import cartopy.feature as cfeature
 
 
+# %%
+training_version = "_v2" #''
+## LOAD teat and predicted data
+IWV_test_predictions_squared=np.load(f'/work/um0203/u301032/master_thesis/retrieval_test_data/IWV_test_predictions_squared{training_version}.npy')
+IWP_test_predictions_squared=np.load(f'/work/um0203/u301032/master_thesis/retrieval_test_data/IWP_test_predictions_squared{training_version}.npy')
+#LWP_test_predictions_squared=np.load(f'/work/um0203/u301032/master_thesis/retrieval_test_data/LWP_test_predictions_squared{training_version}.npy')
+LWP_test_predictions_squared=np.load(f'/work/um0203/u301032/master_thesis/retrieval_test_data/LWP_test_predictions_squared.npy')
+CLWP_test_predictions_squared=np.load(f'/work/um0203/u301032/master_thesis/retrieval_test_data/CLWP_test_predictions_squared{training_version}.npy')
+#test_LWP=np.load(f'/work/um0203/u301032/master_thesis/retrieval_test_data/test_LWP{training_version}.npy')
+test_LWP=np.load(f'/work/um0203/u301032/master_thesis/retrieval_test_data/test_LWP.npy')
+test_CLWP=np.load(f'/work/um0203/u301032/master_thesis/retrieval_test_data/test_CLWP{training_version}.npy')
+test_IWP=np.load(f'/work/um0203/u301032/master_thesis/retrieval_test_data/test_IWP{training_version}.npy')
+test_IWV=np.load(f'/work/um0203/u301032/master_thesis/retrieval_test_data/test_IWV{training_version}.npy')
 
+data=[[test_IWV,IWV_test_predictions_squared],[test_CLWP,CLWP_test_predictions_squared],[test_IWP,IWP_test_predictions_squared]]
+variables=['IWV','LWP','CLWP','IWP']
+target_data = {
+    'IWV': test_IWV,#[::100],
+    'LWP': test_LWP,#[::100],
+    'CLWP': test_CLWP,#[::100],
+    'IWP': test_IWP,#[::100]
 
+}
+prediction_data = {
+    'IWV': IWV_test_predictions_squared,#[::100],
+    'LWP': LWP_test_predictions_squared,#[::100],
+    'CLWP': CLWP_test_predictions_squared,#[::100],
+    'IWP': IWP_test_predictions_squared,#[::100]
+}
+#%%
 
-
-# General settings of the neural network
-NR_of_NEURONS_L1 = 32
-BIAS_INIT = 'zeros'
-WEIGHT_INIT = 'random_normal'
-ACTIVATION_HL = 'tanh'
-ACTIVATION_OP = 'linear'
-LOSS_FUNCTION = tf.keras.losses.MeanSquaredError()
-LEARNING_RATE = 0.001
-
-EPOCHS = 1000
-BATCH_SIZE = 50
-
-
-
-#%% LOAD PREPROCESSED TRANING DATA
-data=[]
-names=[ 'IWV', 'IWP', 'LWP','t_steps','cell_selection']
-for i in range(len(names)):
-    data.append(np.load('/work/um0203/u301032/master_thesis/ML_input/' + name_pamtra_run + '_' + names[i] + '.npy'))
-IWV, IWP, LWP,t_steps,cell_selection =data
-IWP=1000*IWP
-LWP=1000*LWP
-IWP[IWP<1]=0.
-LWP[LWP<1]=0.
-TBs_array=[]
-mu_array=[]
-sigma_array=[]
-
-#for altitude in flight_levels:
-#    TBs_array.append(np.load('/work/um0203/u301032/master_thesis/ML_input/' + name_pamtra_run + '_TBs_altitude_' + str(altitude) + 'm.npy'))
+#%%
+variables=['IWV','LWP','CLWP','IWP']
 
 
 
-
-
-
-#%% Functions
-### Standardizing Input
-##### standardize all TBs along their respective channel as a normal distribution with mean 0 and std of 1
-def standardize_nn_training_data(TBs_train):
-        
-    TBs_centered = np.zeros(TBs_train.shape)
-    mu_train = np.zeros(TBs_train.shape[1])
-    sigma_train = np.zeros(TBs_train.shape[1])
-    for channel in range(TBs_train.shape[1]):
-
-        mu_train[channel] = np.nanmean(TBs_train[:,channel])
-        sigma_train[channel] = np.nanstd(TBs_train[:,channel])   
-
-        TBs_centered[:,channel] = (TBs_train[:,channel] - mu_train[channel])/sigma_train[channel]
-        
-    return TBs_centered, mu_train, sigma_train
-    
-def standardize_nn_input_data_v2(TBs, mu, sigma):
-    
-    TBs = np.asarray(TBs)
-    # if single TB observation provided extend dims to 2
-    if len(TBs.shape) == 1:
-        TBs = TBs[np.newaxis,:]
-    
-    TBs_centered = np.zeros(TBs.shape)
-    for channel in range(TBs.shape[1]):
-
-        TBs_centered[:,channel] = (TBs[:,channel] - mu[channel])/sigma[channel]
-    
-    return TBs_centered
-
-
-def splitting_in_train_test_validate(A,t_steps,slices_train,slices_validate,slices_test):    
-    # Splits in timesteps
-    x=np.arange(0,A.shape[0]+1,A.shape[0]/len(t_steps))
-    x=x.astype(int)
-    indexes = np.concatenate([np.arange(x[i],x[j]) for i,j in slices_train])
-    train=  A[indexes]
-    
-    indexes = np.concatenate([np.arange(x[i],x[j]) for i,j in slices_validate])
-    validate=  A[indexes]
-    
-    indexes = np.concatenate([np.arange(x[i],x[j]) for i,j in slices_test])
-    test=  A[indexes]
-    
-    return train,test,validate
-
-a=np.arange(1,33,4)
-l=[]
-for i in range(len(a)):
-    l.append([a[i],a[i]+1])
-slices_validate=np.asarray(l)    
-a=np.arange(3,33,4)
-l=[]
-for i in range(len(a)):
-    l.append([a[i],a[i]+1])
-slices_test=np.asarray(l)   
-a=np.arange(0,33,2)
-l=[]
-for i in range(len(a)):
-    l.append([a[i],a[i]+1])
-slices_train=np.asarray(l)    
 
 
 #%%
-def array_for_variable(v):
-    match v:
-        case 'IWP':
-            return IWP
-        case 'IWV':
-            return IWV
-        case 'LWP':
-            return LWP  
-hyd = array_for_variable(variable)       
 
-for altitude in flight_levels:
+def plot_scatter_row(filename=None):
+    fig = plt.figure(figsize=(15, 15),constrained_layout=True)
 
-    train_hyd, test_hyd, validate_hyd = splitting_in_train_test_validate(hyd,t_steps,slices_train,slices_validate,slices_test)
-    train_hyd=np.concatenate([train_hyd, validate_hyd])
+    subfigs = fig.subfigures(2, 2)
+    subfigs[0,1]
 
-    TBs=np.load('/work/um0203/u301032/master_thesis/ML_input/' + name_pamtra_run + '_TBs_altitude_' + str(altitude) + 'm.npy')
-    ## Filter for unrealistic BTs missing and determine calculation of flight level
-    TB_input_vector=TBs
-    # Only necessary if one wants to exclude certain frequencies.
-    TB_input_vector = np.concatenate((
-            TB_input_vector[:,0:7], # K-Band
-            TB_input_vector[:,7:14], # V-Band
-            TB_input_vector[:,14:15], # W-Band
-            TB_input_vector[:,15:19], # F-Band
-            TB_input_vector[:,19:]), # G-Band
-            axis=1)
-    TB_input_vector.shape
-
-    if (len(t_steps)*len(cell_selection)!=(TB_input_vector.shape[0])):
-        print("Shape of TB does not match cell and time steps. Please check.")
-
-        """
-        # exclude profiles with unrealistic pamtra simulations
-        TBs[TBs[:,20]<230] = np.nan   # TODO what are in our case unrealistic values?
-        TB_input_vector = TBs[~np.isnan(TBs).any(axis=1),:] #TODO: count NANs. If NAN do not just drop , as index would get messed up
-        IWP = IWP[~np.isnan(TBs).any(axis=1)]
-        LWP = LWP[~np.isnan(TBs).any(axis=1)]
-        IWV = IWV[~np.isnan(TBs).any(axis=1)]
-        """
-        if np.count_nonzero(np.isnan(TBs)) > 0:
-            print("NaN values in Brightnesstemperature array. This may influence the rest of the Retrievaldeveloment, as they are not being filtered.")
-    train_TB, test_TB, validate_TB = splitting_in_train_test_validate(TB_input_vector,t_steps,slices_train,slices_validate,slices_test)
-    train_TB=np.concatenate([train_TB, validate_TB])
-
-    TBs_train_scaled, mu_train, sigma_train = standardize_nn_training_data(train_TB) 
-    TBs_test_scaled = standardize_nn_input_data_v2(test_TB,mu=mu_train,sigma=sigma_train) 
-    TBs_validate_scaled = standardize_nn_input_data_v2(validate_TB,mu=mu_train,sigma=sigma_train)
-
-    print("altitude used for training:", altitude)
-
-    # compile network
-    dnn_model_hyd = tf.keras.Sequential([
-        tf.keras.layers.Dropout(rate=0.05, input_shape=(train_TB.shape[1],)),
-        tf.keras.layers.Dense(NR_of_NEURONS_L1,
-                              input_shape=(train_TB.shape[1],),
-                              bias_initializer=BIAS_INIT,
-                              kernel_initializer=WEIGHT_INIT,
-                              kernel_regularizer="l2",
-                              activation=ACTIVATION_HL,
-                             ),
-        tf.keras.layers.Dense(1,
-                              activation=ACTIVATION_OP)])
-    
-    dnn_model_hyd.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE),
-                          loss=LOSS_FUNCTION,
-                         )
-    
-    dnn_model_hyd.summary()
-
-    
-    
-    #train network
-    history = dnn_model_hyd.fit(
-        TBs_train_scaled, np.sqrt(train_hyd),
-        validation_split=0.2,
-        #validation_data=(TBs_validate_scaled,validate_hyd),#new
-        verbose=0,
-        epochs=EPOCHS,
-        batch_size=BATCH_SIZE,
-        callbacks=[tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=30, restore_best_weights=True)]
-    )
-    
-    # use typhon ploting style
-    #plt.style.use(ty.plots.styles.get('typhon'))
-    
-    plt.plot(history.history['loss'], label='loss')
-    plt.plot(history.history['val_loss'], label='val_loss')
-    #plt.ylim(0,40)
-    plt.xlabel('Epoch')
-    plt.ylabel('Error')
-    plt.grid(True)
-    plt.legend()
-    plt.title(variable)
-
-    # Visualization of predictions
-    hyd_test_predictions = dnn_model_hyd.predict(TBs_test_scaled)[:,0]
-    hyd_test_predictions_squared =hyd_test_predictions**2
-    fig, ax = plt.subplots()
-
-    labels = [
-        f"Truth",
-        "Prediction",
-        "Prediction (cliped)"]
-    ax.hist(np.array([np.sqrt(test_hyd),hyd_test_predictions]).T,bins=25,label=labels)#,IWP_test_predictions_cliped
-    ax.set_xlabel("$\sqrt{IWP}$")
-    ax.set_ylabel("Frequency")
-    plt.legend()
+    for var, subfig, title in zip(variables,subfigs.flat, ['a)','','b)','c)']):
+        if subfig ==subfigs[0,1]:
+            ax=subfig.subplots()
+            ax.axis('off')
+        else:
+            if var =='IWV':
+                kind='lin'
+            else: kind='log'    
+            plot_scatter_log( target_data[var],prediction_data[var], var,kind = kind,fig=subfig)
+            subfig.suptitle(' ',ha='left')
+            subfig.text(0.0, 1.0, title, #transform=ax.transAxes,
+                                       fontsize=16,  va='top')
+    if filename:
+        #plt.tight_layout()
+        plt.savefig(f'/home/u/u301032/orcestra/plots/scatter_tiles_target_predictions_{filename}.png',dpi=400)
     plt.show()
 
-    dnn_model_hyd.save(f'/home/u/u301032/orcestra/NN_IWP_retrieval/NNs/NNs_{variable}/dnn_model_{variable}_24-32-1_reg_{altitude}m_{training_version}.keras')
-    #save mu and sigma
-    np.save(f'/home/u/u301032/orcestra/NN_IWP_retrieval/NNs/standardizing_parameters/mu_' + name_pamtra_run + training_version + '_'+ str(altitude) +'m.npy',mu_train)
-    np.save(f'/home/u/u301032/orcestra/NN_IWP_retrieval/NNs/standardizing_parameters/sigma_' + name_pamtra_run + training_version + '_'+ str(altitude) +'m.npy',sigma_train)
-    print("NN for",altitude,"m has been saved.")
-    if altitude == 14450:
-        train_hyd=np.save(f'/home/u/u301032/orcestra/NN_IWP_retrieval/NNs/NNs_{variable}/dnn_model_{variable}_24-32-1_reg_{altitude}m_ + {training_version}_train_{variable}.npy',train_TB)
-        test_hyd=np.save(f'/home/u/u301032/orcestra/NN_IWP_retrieval/NNs/NNs_{variable}/dnn_model_{variable}_24-32-1_reg_{altitude}m_ + {training_version}_test_{variable}.npy',test_TB)
-        train_TB=np.save(f'/home/u/u301032/orcestra/NN_IWP_retrieval/NNs/NNs_{variable}/dnn_model_{variable}_24-32-1_reg_{altitude}m_ + {training_version}_train_TB.npy',train_hyd)  #Hyd to train
-        test_TB=np.save(f'/home/u/u301032/orcestra/NN_IWP_retrieval/NNs/NNs_{variable}/dnn_model_{variable}_24-32-1_reg_{altitude}m_ + {training_version}_test_TB.npy',test_hyd)
-        print("Training and Test data for",altitude,"m has been saved.")
-
-#%% Retrieval Application
 
 
-ds_HAMP=xr.open_dataset("/work/um0203/u301032/master_thesis/flight_data/halo_HAMP.nc")
-ds_iwv_kw=xr.open_dataset("/work/um0203/u301032/master_thesis/flight_data/halo_iwv_kw.nc")
-ds_sondes=xr.open_dataset("/work/um0203/u301032/master_thesis/flight_data/halo_sondes.nc")
-ds_halo_altitude=xr.open_dataset("/work/um0203/u301032/master_thesis/flight_data/halo_altitude.nc") 
+def plot_scatter_3_tiles(filename=None):
+    fig = plt.figure(figsize=(15, 15),constrained_layout=True)
 
-variable='IWV'
-print(ds_HAMP.frequency)
-ds_hamp=ds_HAMP
+    subfigs = fig.subfigures(2, 2)
+    subfigs[0,1]
 
-excluded_frequencies = ds_hamp.frequency.where(ds_hamp.frequency!=184.81, drop=True)
+    for var, subfig, title in zip(variables,subfigs.flat, ['a)','','b)','c)']):
+        if subfig ==subfigs[0,1]:
+            ax=subfig.subplots()
+            ax.axis('off')
+        else:
+            if var =='IWV':
+                kind='lin'
+            else: kind='log'    
+            plot_scatter_log( target_data[var],prediction_data[var], var,kind = kind,fig=subfig)
+            subfig.suptitle(' ',ha='left')
+            subfig.text(0.0, 1.0, title, #transform=ax.transAxes,
+                                       fontsize=16,  va='top')
+    if filename:
+        #plt.tight_layout()
+        plt.savefig(f'/home/u/u301032/orcestra/plots/scatter_tiles_target_predictions_{filename}.png',dpi=400)
+    plt.show()
 
-# Step 2: Filter the dataset to exclude the specified frequency
-ds_hamp = ds_hamp.sel(frequency=excluded_frequencies)
-print(ds_hamp.TBs)
 
 
-def find_nearest_value(array, value):
-    array = np.asarray(array)
-    idx = (np.abs(array - value)).argmin()
-    return array[idx]
-def retrieve_hyd(TBs,altitudes):
+
+#%%
+fig = plt.figure(figsize=(12, 12),constrained_layout=True)
+
+subfigs = fig.subfigures(2, 2)
+subfigs[0,1]
+
+for outerind, subfig in enumerate(subfigs.flat):
+    if subfig ==subfigs[0,1]:
+        ax=subfig.subplots()
+        ax.axis('off')
+    else:
+        subfig.suptitle(f'Subfig {outerind}')
+
+        axs = subfig.subplot_mosaic([['histx', '.'],
+                                ['scatter', 'histy']],
+                                 width_ratios=(5, 1), height_ratios=(1, 5))
+
+plt.show()
+#%%
+def plot_2_by_1_errors_MFE(target_data, prediction_data, variables=['CLWP','IWP'],ylim=[0,600], filename=None):
+
+    # Erstellen der Figure mit 3 Unterplots in einer Spalte
+    fig, axes = plt.subplots(1, 2, figsize=(10, 5))#15,5
     
-    levels = np.array([find_nearest_value(flight_levels,altitudes[i]) for i in range(len(altitudes))])
-    hyd== np.zeros(len(TBs))
-    hyd[:] = np.nan
-    for i in range(len(flight_levels)):
-        altitude =flight_levels[i]
-        if len(levels[levels==altitude]) != 0:
-            print(f"Retrieving from {altitude} ({len(levels[levels==altitude])} TBs)")
-            #hier modul load
-            mu_train=np.load(f'/home/u/u301032/orcestra/NN_IWP_retrieval/NNs/standardizing_parameters/mu_' + name_pamtra_run + training_version + '_'+ str(altitude) +'m.npy')
-            sigma_train=np.load(f'/home/u/u301032/orcestra/NN_IWP_retrieval/NNs/standardizing_parameters/sigma_' + name_pamtra_run + training_version + '_'+ str(altitude) +'m.npy')
-            
-            ds_hamp_scaled=standardize_nn_input_data_v2(np.asarray(ds_hamp.TBs[levels==altitude].values),mu=mu_train,sigma=sigma_train)
+    # Für jedes Variable: plot auf dem jeweiligen Subplot
+    for ax, var, title in zip(axes, variables, ['a)','b)']):
+        # Aufrufen der angepassten Funktion
 
-            dnn_model_hyd = tf.keras.models.load_model(f'/home/u/u301032/orcestra/NN_IWP_retrieval/NNs/NNs_{variable}/dnn_model_{variable}_24-32-1_reg_{altitude}m_ + {training_version}.keras',compile=False) #TODO adjust input name of retrieval
-            hyd[np.where(levels==altitude)] = dnn_model_hyd.predict(ds_hamp_scaled)[:,0]**2
-    # Indicate the fraction of negative predictions (possible as the sqrt of hyd is retrieved).
-    print("")
-    print((len(hyd[hyd<0])/len(hyd)),"% negative predictions (=clipped to 0).")
-    print("")
-    # If negative  values exist, they are clipped to 0.
-    hyd[hyd<0] = 0.
-    # clip everything below 10500km
-    hyd[altitudes<=10500] =np.nan
-    levels[altitudes<=10500] =0
+        plot_NN_error_v4(target_data[var], prediction_data[var], var, filename=filename,error='MFE', ax=ax,ylim=ylim)
+        # Optional: Titel oder andere Anpassungen
+        
+        ax.text(0.05, 1.03, title, transform=ax.transAxes,
+          fontsize=16,  va='top')
+    
+    plt.tight_layout()
+    if filename:
+        plt.savefig(f'/home/u/u301032/orcestra/plots/error_MFE_2x1_{filename}.png')
+        print('Plot gespeichert als:', f'/home/u/u301032/orcestra/plots/error_MFE_2x1_{filename}.png')
+    plt.show()
 
-    return hyd, levels 
-IWV, levels =retrieve_hyd(ds_hamp['TBs'].values,ds_hamp['plane_altitude'].values)
+#%%
+def plot_3_by_1_errors(target_data, prediction_data, variables=['IWV','CLWP','IWP'],ylim=[-30,350], filename=None):
+
+    # Erstellen der Figure mit 3 Unterplots in einer Spalte
+    fig, axes = plt.subplots(1, 3, figsize=(10, 5))#15,5
+    
+    # Für jedes Variable: plot auf dem jeweiligen Subplot
+    for ax, var, title in zip(axes, variables, ['a)','b)','c)']):
+        # Aufrufen der angepassten Funktion
+
+        plot_NN_error_v4(target_data[var], prediction_data[var], var, filename=filename, ax=ax,ylim=ylim)
+        # Optional: Titel oder andere Anpassungen
+        
+        ax.text(0.05, 1.03, title, transform=ax.transAxes,
+          fontsize=16,  va='top')
+    
+    plt.tight_layout()
+    if filename:
+        plt.savefig(f'/home/u/u301032/orcestra/plots/RMSEandbias_3x1{filename}.png')
+        print('Plot gespeichert als:', f'/home/u/u301032/orcestra/plots/RMSEandbias_3x1{filename}.png')
+    plt.show()
+#%%
+dev.plot_3_by_1_errors(target_data,prediction_data)
+
+dev.plot_NN_error_v4(test_IWV,IWV_test_predictions_squared,variable='IWV')    
+# %%
+
+
+# %%
+
+def calc_bias(targets,predictions,bin=[0,5]):
+    mask=np.logical_and(predictions>= bin[0], predictions<= bin[1])
+    print(mask.sum())
+    p=predictions[mask]
+    t=targets[mask]
+    bias = ( t - p).mean()
+    return bias
+calc_bias(test_CLWP,CLWP_test_predictions_squared,bin=[0,1])
+# %%
+plot_3_by_1_errors(target_data,prediction_data,variables=['IWV','CLWP','IWP'],filename=None)#'v2_newrun'#'v1'
+
+# %%
+
+def plot_NN_error_v4(true, prediction,variable,ax=None,filename=None,error='RMSE',ylim=[-50,80]):
+    if variable=='CLWP':
+        variable='LWP' #for eays plotting
+    #so far used for graphics
+
+    
+
+    a,b=dev.no_nan_for_plot(true, prediction)
+    # Define bin edges (e.g., 10 bins)
+    num_bins = 20
+    
+    if variable == 'IWV':
+        num_bins = 22
+        bins = np.linspace(17.25, 72.25, num_bins+1 )#np.linspace(np.min(b), np.max(b), num_bins+1 )
+    else: 
+        if variable == 'IWP':
+            bin_max = 4 # max(a) #set to number of interest or maybe with 
+        if variable == 'LWP':
+            bin_max = 4
+        
+        bin_min = 0
+        num_bins = int((bin_max - bin_min) *4)
+        bins  = np.logspace(bin_min, bin_max, num_bins + 1)
+    # 
+    
+    # Digitize 'a' to find out which bin each value belongs to
+    bin_indices = np.digitize(b, bins)
+    
+    # Initialize arrays to hold results
+    bin_centers = (bins[:-1] + bins[1:]) / 2
+    b_error = np.empty(num_bins)
+    b_bias = np.empty(num_bins)
+    b_std = np.empty(num_bins)
+    b_std2 = np.empty(num_bins)
+    b_MFE = np.empty(num_bins)
+    b_MFE2 = np.empty(num_bins)
+    rel_100 = np.empty(num_bins)
+    # Calculate error (e.g., standard deviation) of 'b' within each bin
+    for i in range(1, num_bins + 1):
+        
+        # Find indices of data points in the current bin
+        in_bin = bin_indices == i
+
+        if np.sum(in_bin) <=5:
+            b_error[i-1]=np.nan
+            b_bias[i-1]=np.nan
+            b_std[i - 1]=np.nan
+            b_MFE[i - 1]=np.nan
+            print(np.log10(bin_centers[i-1]))
+            continue
+        #error as rmse between true and predicted # like in marek s paper
+        targets= a[in_bin]
+        predictions= b[in_bin]
+        b_error[i-1]= np.sqrt(((targets-predictions)**2).mean())
+        #rel_100[i-1]= np.sqrt((((predictions - targets)/predictions)**2).mean())
+        b_bias[i-1]= ( targets - predictions).mean()
+        ## Calculate standard deviation of 'b' for these points
+        b_std[i - 1] = np.std(predictions - targets)
+        #b_std2[i - 1] = np.sqrt(((predictions - targets-b_bias[i-1])**2).mean())
+        #rel_100=
+        b_MFE[i - 1] = np.median(10**(np.abs(np.log10(predictions/targets)))-1)*100
+        #b_MFE2[i - 1] = np.median(10**(np.abs(predictions-targets)))*100
+        print(np.sum(in_bin),np.round((bin_centers[i-1])),'bias: ',np.round(b_bias[i-1]),np.round(b_bias[i-1]/(bin_centers[i-1])*100),'RMSE: ',np.round(b_error[i-1]),np.round(b_error[i-1]/(bin_centers[i-1])*100))
+    
+    # Plotting
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(5,6))  
+        show_plot = True
+    else:
+        show_plot = False
+    # Plot Error curves
+    
+    
+
+
+    match error:
+        case 'RMSE':
+
+            #ax.plot(bin_centers,b_std,label='std')
+            if variable == 'IWV':
+                error_curves =[-1,1,2,5]
+                x=np.linspace(np.min(b)-1, np.max(b)+3,200)
+            else:
+                error_curves =[5,10,25,50,100,250,500]
+                x=np.logspace(bin_min, bin_max, num_bins *10)
+            for e in error_curves:
+                
+                ax.plot(x,(0.01*e)*x,linestyle=':',color='grey',label=e) #relative erorr 20 percent
+                if variable=='IWV':
+                    X=np.max(b)#-0.05*(np.max(b)-np.min(b))
+                    Y=X*((0.01*e))
+                    print(e,Y,X)
+                    #plt.scatter(X, Y)
+                    ax.text(X, Y,f'{e} %',verticalalignment='center_baseline',horizontalalignment='center',rotation=0)
+                    #ax.text(X, -Y,f'{e} %',verticalalignment='center_baseline',horizontalalignment='center',rotation=0)
+                    #ax.plot(x,-(0.01*1)*x,linestyle=':',color='grey',label=e)
+                else:
+                    ax.plot(x,-(0.01*e)*x,linestyle=':',color='grey',label=e)
+                    X=ylim[1]-0.05*(ylim[1]-ylim[0])#950#1200#400 + (0.01*e)*800
+                    ax.text(X*(1/(0.01*e)), X,f'{e} %',verticalalignment='center_baseline',horizontalalignment='center',rotation=80)
+                    #plt.scatter(X*(1/(0.01*e)), X)
+            ax.plot(x,0*x,linestyle='-',color='grey',label=e)
+            ax.plot(bin_centers,b_error,label='RMSE')
+            ax.plot(bin_centers,b_bias,label='bias')
+            ax.grid()
+        case 'MFE':
+            ax.plot(bin_centers,b_MFE,label='MFE')
+            ax.grid()
+          
+    
+    #plt.errorbar(bin_centers, np.zeros_like(bin_centers), yerr=b_error, fmt='o', capsize=5)
+
+    if variable == 'IWV':
+        ax.set_xlabel('Retrieved '+ variable+' \\ kg m$^{-2}$')
+        ax.set_ylabel('Error: True - retrieved  '+variable+' \\ kg m$^{-2}$')
+        ax.set_ylim(bottom=-1,top=5)
+        
+        #plt.plot(bin_centers,0.05*bin_centers,linestyle='--',color='grey') #relative erorr 100 percent
+        #plt.plot(bin_centers,0.01*bin_centers,linestyle='-.',color='grey') #relative erorr 100 percent
+    else:
+        ax.set_ylabel('Error: True - retrieved  '+variable+' \\ g m$^{-2}$')
+        ax.set_xscale('log')
+        #plt.yscale('log')
+        ax.set_xlabel('Retrieved '+ variable+' \\ g m$^{-2}$')
+        
+        if  variable == 'IWP':
+            ax.set_ylim(bottom=ylim[0],top=ylim[1])   #(bottom=-320,top=1020) #
+        elif  variable == 'LWP':
+            ax.set_ylim(bottom=ylim[0],top=ylim[1])   #(bottom=-220,top=1000) 
+            1
+            #plt.yscale('log')
+        else:
+            ax.set_ylim(top=120)    
+            ax.set_ylim(bottom=ylim[0],top=ylim[1])   
+
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    
+    #plt.title('Error of b within each a bin')
+    
+    if filename and show_plot:
+        plt.tight_layout()
+        plt.savefig(f'/home/u/u301032/orcestra/plots/{variable}_error_biasRMSE_{filename}.png',dpi=400)
+    if show_plot:
+        plt.tight_layout()
+        plt.show()
+
+# %%

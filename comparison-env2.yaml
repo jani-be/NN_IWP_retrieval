@@ -1,0 +1,19 @@
+name: comparison-env2
+channels:
+    - conda-forge
+dependencies:
+    - numpy
+    - xarray
+    - pandas
+    - matplotlib
+    - fsspec
+    - scipy
+    - ipfsspec==0.5.3 #wenn nicht vorhanden sonst ueber pip install
+    - ipykernel
+    - zarr   
+    - netCDF4
+    - h5netcdf 
+    - dask
+    - ipython
+    - ipykernel
+    - functools

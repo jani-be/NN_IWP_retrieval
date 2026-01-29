@@ -23,8 +23,8 @@ sys.path.append('/home/u/u301032/orcestra/NN_IWP_retrieval/')
 import src_comparison_halo_pamtra as chp
 
 import matplotlib.colors as colors
-import cartopy.crs as ccrs
-import cartopy.feature as cfeature
+#import cartopy.crs as ccrs
+#import cartopy.feature as cfeature
 
 #%% Data Comparison condensate loads all campaign days with reruns (2D field)
 #Read in all 2D fields.
@@ -421,8 +421,9 @@ plt.show()
 # how well are the reruns?
 def halo_icepeak_analysis():
   #reading g band data
+  fs=fsspec.filesystem('ipns')
   ds_hamp_list=[]
-  list_a=(fs.glob("ipns://latest.orcestra-campaign.org/products/HALO/radiometer/*"))
+  list_a=(fs.glob("ipns://latest.orcestra-campaign.org/products/HALO/HAMP/Level_2/HALO*/*"))
   [ds_hamp_list.append(xr.open_dataset("ipns://"+i,
                   engine="zarr"))for i in list_a]
   ds_hamp=xr.concat([xr.open_dataset("ipns://"+i,
@@ -449,10 +450,10 @@ def halo_icepeak_analysis():
     plt.show()
 
 
-#halo_icepeak_analysis()
+halo_icepeak_analysis()
 #%%
 fs = fsspec.filesystem("ipns")
-#list_a=(fs.glob("ipns://latest.orcestra-campaign.org/products/HALO/position_attitude*"))
+#list_a=(fs.glob("ipns://latest.orcestra-campaign.org/products/HALO/Level_2/position_attitude*"))
 
 ds_altitude=xr.open_dataset('ipns://latest.orcestra-campaign.org/products/HALO/position_attitude.zarr',
                   engine="zarr")
